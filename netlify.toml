@@ -2,6 +2,13 @@
   command = ""
   publish = "."
 
+# 验证文件的特殊规则 - 确保验证文件可以被直接访问
+[[redirects]]
+  from = "/748233ed6cd8396c74b58e351e44011c.txt"
+  to = "/748233ed6cd8396c74b58e351e44011c.txt"
+  status = 200
+
+# 主应用的重定向规则
 [[redirects]]
   from = "/*"
   to = "/index.html"
