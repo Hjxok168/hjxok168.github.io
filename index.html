@@ -7,9 +7,9 @@
     <link rel="stylesheet" href="styles.css">
     <script src="scripts.js" defer></script>
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" integrity="sha384-QyBQLA0Ci0K5GqyzHm5pRfR7/2T9X26zG3XmW9Y9qk3HBmzZg64q2XnV2t/9I4Jd" crossorigin="anonymous"></script>
     <!-- Font Awesome -->
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous" rel="stylesheet">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
@@ -33,28 +33,8 @@
         }
     </script>
     
-    <!-- Custom Utilities -->
-    <style type="text/tailwindcss">
-        @layer utilities {
-            .content-auto {
-                content-visibility: auto;
-            }
-            .text-shadow {
-                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .bg-gradient-custom {
-                background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
-            }
-            .animate-float {
-                animation: float 6s ease-in-out infinite;
-            }
-            @keyframes float {
-                0% { transform: translateY(0px); }
-                50% { transform: translateY(-20px); }
-                100% { transform: translateY(0px); }
-            }
-        }
-    </style>
+    <!-- 引入简单Tailwind CSS文件 -->
+    <link href="src/simple.css" rel="stylesheet">
 </head>
 <body class="font-inter bg-light text-dark">
     <!-- Navigation -->
@@ -4593,7 +4573,8 @@
                     <p class="text-gray-600 max-w-2xl mx-auto mb-8">定期获取前沿知识资讯、专家观点和独家活动邀请，不错过任何重要信息。</p>
                     <form class="max-w-md mx-auto">
                         <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-2">
-                            <input type="email" placeholder="请输入您的邮箱地址" class="flex-grow px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                            <label for="email" class="sr-only">邮箱地址</label>
+                            <input type="email" id="email" placeholder="请输入您的邮箱地址" class="flex-grow px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
                             <button type="submit" class="px-6 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all">
                                 立即订阅
                             </button>

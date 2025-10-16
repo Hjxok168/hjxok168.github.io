@@ -111,6 +111,35 @@ python -m http.server 8080
 
 然后通过浏览器访问 `http://localhost:8080` 查看网站。
 
+### 方法3：使用Tailwind CSS构建（推荐）
+
+#### 安装依赖
+
+```bash
+npm install
+```
+
+#### 构建CSS
+
+```bash
+npm run build
+```
+
+#### 监听模式（开发时使用）
+
+```bash
+npm run watch
+```
+
+## Tailwind CSS项目配置
+
+项目已配置了Tailwind CSS，包含以下文件：
+- `tailwind.config.js` - Tailwind CSS配置
+- `postcss.config.js` - PostCSS配置
+- `package.json` - 项目依赖和脚本
+- `src/input.css` - Tailwind CSS的输入文件
+- `dist/output.css` - 构建后的CSS输出文件（构建后生成）
+
 ## 项目结构
 
 ```

@@ -2,10 +2,17 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="public, max-age=31536000, immutable">
+    <meta http-equiv="Expires" content="Sat, 01 Jan 2025 00:00:00 GMT">
     <title>快乐8 AI预测游戏</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 开发环境使用CDN版本，生产环境请使用构建版本 -->
+    <!-- 生产环境构建命令: npm install && npm run build -->
+    <!-- 然后替换为: <link href="dist/output.css" rel="stylesheet"> -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <link href="styles_fixed.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
     <script>
         // 全局状态管理
@@ -14,7 +21,8 @@
             frequencyData: [],
             predictionHistory: [],
             isDataLoaded: false,
-            selectedNumbers: new Set()
+            selectedNumbers: new Set(),
+            positionCharts: {}
         };
 
         tailwind.config = {
@@ -38,20 +46,69 @@
         }
     </script>
     <style type="text/css">
+        /* Font Awesome 兼容性样式 */
+        .fa-rotate-90, .fa-rotate-180, .fa-rotate-270, 
+        .fa-flip-horizontal, .fa-flip-vertical {
+            -ms-filter: none;
+            filter: none;
+            /* 为不支持-ms-filter的浏览器提供替代方案 */
+            transform: none;
+        }
+        
+        /* 为旋转类提供特定替代方案 */
+        .fa-rotate-90 {
+            transform: rotate(90deg);
+        }
+        .fa-rotate-180 {
+            transform: rotate(180deg);
+        }
+        .fa-rotate-270 {
+            transform: rotate(270deg);
+        }
+        .fa-flip-horizontal {
+            transform: scale(-1, 1);
+        }
+        .fa-flip-vertical {
+            transform: scale(1, -1);
+        }
         /* 全局基础样式 */
         html {
             -webkit-text-size-adjust: 100%;
+            -moz-text-size-adjust: 100%;
             text-size-adjust: 100%;
+            /* 针对不支持text-size-adjust的浏览器 */
+            -webkit-text-size-adjust: none;
+            -ms-text-size-adjust: 100%;
+        }
+        
+        /* 针对不支持text-size-adjust的浏览器提供后备方案 */
+        @supports not (-webkit-text-size-adjust: 100%) {
+            html {
+                -webkit-text-size-adjust: none;
+            }
+            
+            body {
+                -webkit-text-size-adjust: none;
+                -ms-text-size-adjust: none;
+            }
         }
         
         /* 滚动条隐藏 */
         .scrollbar-hide {
             -ms-overflow-style: none;
             scrollbar-width: none;
+            overflow: -moz-scrollbars-none;
         }
         
         .scrollbar-hide::-webkit-scrollbar {
             display: none;
+        }
+        
+        /* Safari兼容性 */
+        @supports not (scrollbar-width: none) {
+            .scrollbar-hide {
+                overflow: -moz-scrollbars-none;
+            }
         }
         
         /* 号码球样式 */
@@ -110,6 +167,9 @@
                 </button>
                 <button id="dataCompareBtn" class="bg-danger hover:bg-danger/90 text-white px-4 py-2 rounded-md transition-all">
                     <i class="fa fa-exchange mr-1"></i> 数据对比
+                </button>
+                <button id="predictResultCompareBtn" class="bg-secondary hover:bg-secondary/90 text-white px-4 py-2 rounded-md transition-all">
+                    <i class="fa fa-line-chart mr-1"></i> 预测结果对比
                 </button>
                 <button id="sameNumbersBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-all">
                     <i class="fa fa-clone mr-1"></i> 相同号码对比
@@ -303,7 +363,7 @@
                     <div class="flex justify-between items-center mb-3">
                         <h3 class="text-lg font-semibold">号码位置走势图</h3>
                         <div class="flex items-center space-x-3">
-                            <select id="positionChartPeriods" class="border rounded-md px-3 py-1.5 text-sm">
+                            <select id="positionChartPeriods" class="border rounded-md px-3 py-1.5 text-sm" aria-label="选择走势图显示期数">
                                 <option value="10">最近10期</option>
                                 <option value="20" selected>最近20期</option>
                                 <option value="30">最近30期</option>
@@ -496,7 +556,7 @@
                 <button id="addNewKl8HistoryBtn" class="bg-info hover:bg-info/90 text-white px-4 py-2 rounded-md transition-all mr-2">
                     <i class="fa fa-plus mr-1"></i> 添加数据
                 </button>
-                <input type="file" id="kl8HistoryFileInput" accept=".json" class="hidden">
+                <input type="file" id="kl8HistoryFileInput" accept=".json" class="hidden" title="导入历史数据JSON文件" aria-label="导入历史数据">
                 <button id="saveEditedKl8HistoryBtn" class="bg-success hover:bg-success/90 text-white px-4 py-2 rounded-md transition-all mr-2">
                     <i class="fa fa-save mr-1"></i> 保存修改
                 </button>
@@ -1273,209 +1333,7 @@
             }
         }
         
-        // 新增：数据对比函数
-        function comparePredictions() {
-            if (localState.predictionHistory.length < 2) {
-                showNotification('至少需要2条预测记录才能进行对比', 'warning');
-                return;
-            }
-            
-            // 获取最近5条记录进行对比
-            const recentPredictions = localState.predictionHistory.slice(0, 5);
-            
-            // 计算准确率统计
-            let totalAccuracy = 0;
-            let verifiedCount = 0;
-            const methodStats = {};
-            
-            recentPredictions.forEach(prediction => {
-                if (prediction.accuracy !== '--') {
-                    const accuracy = parseFloat(prediction.accuracy);
-                    totalAccuracy += accuracy;
-                    verifiedCount++;
-                    
-                    // 统计每种方法的准确率
-                    if (!methodStats[prediction.method]) {
-                        methodStats[prediction.method] = { sum: 0, count: 0 };
-                    }
-                    methodStats[prediction.method].sum += accuracy;
-                    methodStats[prediction.method].count++;
-                }
-            });
-            
-            // 准备对比数据
-            const comparisonData = {
-                averageAccuracy: verifiedCount > 0 ? (totalAccuracy / verifiedCount).toFixed(2) : '--',
-                verifiedCount: verifiedCount,
-                totalCount: recentPredictions.length,
-                methodStats: methodStats,
-                predictions: recentPredictions
-            };
-            
-            // 渲染对比结果
-            renderComparisonResult(comparisonData);
-            
-            // 显示对比模态框
-            document.getElementById('dataCompareModal').classList.remove('hidden');
-        }
-        
-        // 新增：渲染对比结果
-        function renderComparisonResult(data) {
-            const container = document.getElementById('comparisonContent');
-            
-            // 清空容器
-            container.innerHTML = '';
-            
-            // 创建统计卡片
-            const statsCard = document.createElement('div');
-            statsCard.className = 'bg-white rounded-lg shadow-sm p-5 mb-6';
-            
-            statsCard.innerHTML = `
-                <h3 class="text-lg font-semibold text-dark mb-4">预测统计</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <p class="text-sm text-gray-500">平均准确率</p>
-                        <p class="text-xl font-bold text-primary">${data.averageAccuracy}%</p>
-                    </div>
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <p class="text-sm text-gray-500">验证预测数</p>
-                        <p class="text-xl font-bold text-secondary">${data.verifiedCount}/${data.totalCount}</p>
-                    </div>
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <p class="text-sm text-gray-500">最近对比期数</p>
-                        <p class="text-xl font-bold text-success">${data.totalCount}</p>
-                    </div>
-                </div>
-            `;
-            
-            container.appendChild(statsCard);
-            
-            // 创建方法对比卡片
-            const methodCard = document.createElement('div');
-            methodCard.className = 'bg-white rounded-lg shadow-sm p-5 mb-6';
-            
-            let methodHtml = `
-                <h3 class="text-lg font-semibold text-dark mb-4">预测方法对比</h3>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">预测方法</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平均准确率</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">预测次数</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-            `;
-            
-            // 添加方法统计
-            for (const [method, stats] of Object.entries(data.methodStats)) {
-                let methodText = '';
-                switch (method) {
-                    case 'smart':
-                        methodText = '智能预测';
-                        break;
-                    case 'balanced':
-                        methodText = '平衡分区';
-                        break;
-                    case 'frequency':
-                        methodText = '频率预测';
-                        break;
-                    default:
-                        methodText = '手动选择';
-                }
-                
-                const avgAccuracy = (stats.sum / stats.count).toFixed(2);
-                
-                methodHtml += `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-dark">${methodText}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${avgAccuracy}%</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${stats.count}</td>
-                    </tr>
-                `;
-            }
-            
-            if (Object.keys(data.methodStats).length === 0) {
-                methodHtml += `
-                    <tr>
-                        <td colspan="3" class="px-6 py-8 text-center text-gray-400 italic">暂无验证的预测数据</td>
-                    </tr>
-                `;
-            }
-            
-            methodHtml += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            methodCard.innerHTML = methodHtml;
-            
-            container.appendChild(methodCard);
-            
-            // 创建预测记录对比表格
-            const comparisonTable = document.createElement('div');
-            comparisonTable.className = 'bg-white rounded-lg shadow-sm p-5';
-            
-            let tableHtml = `
-                <h3 class="text-lg font-semibold text-dark mb-4">预测记录对比</h3>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">预测时间</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">预测方法</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">预测号码</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">准确率</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-            `;
-            
-            // 添加预测记录
-            data.predictions.forEach((prediction, index) => {
-                let methodText = '';
-                switch (prediction.method) {
-                    case 'smart':
-                        methodText = '智能预测';
-                        break;
-                    case 'balanced':
-                        methodText = '平衡分区';
-                        break;
-                    case 'frequency':
-                        methodText = '频率预测';
-                        break;
-                    default:
-                        methodText = '手动选择';
-                }
-                
-                // 生成号码球显示
-                let numbersHtml = '';
-                prediction.numbers.forEach(number => {
-                    numbersHtml += '<div class="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center m-0.5">' + number + '</div>';
-                });
-                
-                tableHtml += `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">${prediction.timestamp}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">${methodText}</td>
-                        <td class="px-6 py-4 whitespace-nowrap"><div class="flex flex-wrap">${numbersHtml}</div></td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm ${prediction.accuracy !== '--' ? 'font-medium text-success' : 'text-gray-400'}">${prediction.accuracy}</td>
-                    </tr>
-                `;
-            });
-            
-            tableHtml += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            comparisonTable.innerHTML = tableHtml;
-            
-            container.appendChild(comparisonTable);
-        }
+        // 数据对比功能将在后面定义
 
         // 更新预测号码显示
         function updatePredictedNumbersDisplay(numbers, period) {
@@ -1934,132 +1792,144 @@
 
         // 加载历史数据
         function loadKl8HistoryData() {
-            console.log('开始加载快乐8历史数据...');
-            
-            // 尝试获取内容元素，但不依赖它
-            const contentElement = document.getElementById('kl8HistoryContent');
-            if (contentElement) {
-                // 如果元素存在，显示加载状态
-                contentElement.innerHTML = `
-                    <div class="flex items-center justify-center h-40 text-gray-400">
-                        <i class="fa fa-spinner fa-spin mr-2"></i> 正在加载数据...
-                    </div>
-                `;
-            }
-            
-            try {
-                // 直接使用备份数据
-                const simpleCreateData = [
-                    { period: "2025272", numbers: ["03", "06", "09", "10", "11", "13", "14", "16", "20", "22", "25", "43", "47", "50", "60", "61", "62", "68", "73", "79"] },
-                    { period: "2025271", numbers: ["01", "03", "07", "15", "17", "20", "27", "37", "41", "42", "47", "48", "53", "54", "60", "62", "63", "68", "77", "78"] },
-                    { period: "2025270", numbers: ["02", "08", "10", "20", "21", "27", "28", "30", "33", "36", "43", "48", "49", "52", "60", "61", "64", "71", "75", "79"] },  
-                    { period: "2025269", numbers: ["01", "08", "10", "15", "19", "20", "24", "30", "33", "43", "49", "50", "56", "57", "60", "67", "70", "73", "78", "80"] },
-                    { period: "2025268", numbers: ["05", "12", "16", "18", "19", "26", "31", "33", "38", "39", "41", "42", "49", "54", "59", "64", "65", "70", "73", "77"] },
-                    { period: "2025267", numbers: ["08", "13", "20", "21", "25", "34", "37", "39", "45", "47", "50", "57", "58", "60", "65", "71", "72", "75", "78", "79"] },
-                    { period: "2025266", numbers: ["01", "05", "09", "13", "16", "17", "25", "28", "29", "33", "34", "38", "45", "47", "48", "55", "62", "71", "73", "78"] },
-                    { period: "2025265", numbers: ["02", "09", "11", "16", "18", "27", "28", "35", "36", "38", "49", "52", "54", "60", "62", "64", "66", "72", "77", "78"] },
-                    { period: "2025264", numbers: ["06", "10", "15", "16", "20", "24", "25", "28", "34", "35", "37", "38", "42", "44", "45", "49", "54", "66", "69", "80"] },
-                    { period: "2025263", numbers: ["04", "05", "11", "13", "14", "20", "23", "24", "27", "32", "33", "42", "45", "55", "58", "62", "64", "70", "79", "80"] },
-                    { period: "2025262", numbers: ["08", "10", "14", "19", "27", "31", "33", "40", "42", "44", "46", "47", "49", "54", "58", "60", "67", "70", "75", "77"] },
-                    { period: "2025261", numbers: ["03", "10", "15", "17", "19", "22", "23", "25", "31", "35", "36", "42", "60", "61", "62", "65", "70", "73", "76", "77"] },
-                    { period: "2025260", numbers: ["03", "08", "10", "11", "13", "16", "21", "24", "27", "38", "41", "48", "54", "58", "59", "61", "62", "66", "69", "71"] },
-                    { period: "2025259", numbers: ["04", "07", "09", "19", "20", "30", "33", "35", "44", "45", "48", "49", "50", "51", "52", "70", "71", "72", "74", "78"] },
-                    { period: "2025258", numbers: ["01", "05", "10", "12", "16", "23", "25", "28", "29", "36", "40", "46", "51", "55", "58", "64", "66", "71", "76", "80"] },
-                    { period: "2025257", numbers: ["01", "08", "13", "15", "22", "34", "36", "38", "42", "43", "49", "50", "51", "65", "66", "67", "70", "71", "79", "80"] },
-                    { period: "2025256", numbers: ["08", "13", "18", "29", "34", "35", "39", "41", "43", "45", "46", "47", "57", "64", "68", "71", "73", "74", "75", "78"] },
-                    { period: "2025255", numbers: ["05", "13", "15", "21", "25", "26", "27", "31", "37", "39", "46", "50", "54", "56", "57", "59", "65", "70", "78", "79"] },
-                    { period: "2025254", numbers: ["16", "18", "20", "29", "32", "36", "37", "41", "52", "53", "54", "55", "56", "57", "65", "69", "70", "74", "75", "76"] },
-                    { period: "2025253", numbers: ["03", "10", "20", "23", "27", "30", "32", "35", "44", "48", "50", "51", "53", "56", "57", "63", "65", "68", "70", "72"] },
-                    { period: "2025252", numbers: ["13", "18", "19", "26", "27", "30", "33", "37", "41", "43", "47", "49", "53", "58", "61", "64", "68", "71", "73", "76"] },
-                    { period: "2025251", numbers: ["01", "02", "04", "14", "15", "23", "25", "26", "27", "30", "36", "39", "42", "44", "46", "52", "55", "62", "65", "66"] },
-                    { period: "2025250", numbers: ["01", "02", "06", "16", "20", "21", "23", "26", "27", "29", "30", "34", "40", "43", "59", "63", "65", "71", "79", "80"] },
-                    { period: "2025249", numbers: ["01", "06", "07", "12", "13", "15", "21", "25", "27", "30", "36", "40", "41", "45", "55", "57", "67", "72", "73", "77"] },
-                    { period: "2025248", numbers: ["06", "10", "21", "22", "28", "29", "32", "33", "34", "37", "43", "49", "51", "52", "55", "56", "57", "59", "67", "80"] },
-                    { period: "2025247", numbers: ["01", "03", "05", "06", "10", "11", "14", "23", "25", "32", "35", "36", "50", "51", "57", "58", "65", "72", "73", "76"] },
-                    { period: "2025246", numbers: ["01", "04", "08", "11", "26", "27", "30", "37", "46", "53", "55", "57", "62", "64", "65", "69", "72", "78", "79", "80"] },
-                    { period: "2025245", numbers: ["02", "07", "08", "11", "17", "19", "21", "22", "26", "28", "31", "40", "43", "44", "53", "63", "71", "74", "76", "80"] },
-                    { period: "2025244", numbers: ["02", "03", "06", "10", "12", "16", "23", "25", "28", "29", "34", "35", "38", "42", "44", "47", "58", "64", "73", "80"] },
-                    { period: "2025243", numbers: ["01", "04", "07", "18", "22", "25", "29", "30", "34", "37", "43", "49", "51", "53", "54", "55", "57", "67", "75", "77"] },
-                    { period: "2025242", numbers: ["02", "08", "11", "13", "15", "16", "20", "21", "23", "26", "35", "53", "65", "66", "69", "72", "73", "78", "79", "80"] },
-                    { period: "2025241", numbers: ["03", "07", "12", "13", "16", "18", "20", "28", "37", "47", "48", "50", "53", "61", "63", "68", "69", "75", "76", "80"] },
-                    { period: "2025240", numbers: ["08", "09", "11", "12", "15", "27", "35", "36", "43", "45", "49", "50", "51", "61", "64", "65", "68", "72", "78", "79"] },
-                    { period: "2025239", numbers: ["02", "03", "10", "12", "15", "21", "22", "27", "34", "35", "37", "38", "49", "51", "55", "65", "66", "70", "71", "76"] }
-                ];
+            return new Promise((resolve, reject) => {
+                console.log('开始加载快乐8历史数据...');
                 
-                // 使用去重排序函数确保数据格式正确
-                localState.kl8HistoryData = deduplicateAndSortData(simpleCreateData);
+                // 尝试获取内容元素，但不依赖它
+                const contentElement = document.getElementById('kl8HistoryContent');
+                if (contentElement) {
+                    // 如果元素存在，显示加载状态
+                    contentElement.innerHTML = `
+                        <div class="flex items-center justify-center h-40 text-gray-400">
+                            <i class="fa fa-spinner fa-spin mr-2"></i> 正在加载数据...
+                        </div>
+                    `;
+                }
                 
-                // 标记数据已加载
-                localState.isDataLoaded = true;
-                
-                // 在页面上显示数据加载状态和统计信息
-                const statusElement = document.createElement('div');
-                statusElement.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
-                statusElement.innerHTML = `
-                    <div>数据加载成功</div>
-                    <div>共加载 ${localState.kl8HistoryData.length} 期数据</div>
-                    <div>最早期号: ${localState.kl8HistoryData[localState.kl8HistoryData.length - 1].period}</div>
-                    <div>最新期号: ${localState.kl8HistoryData[0].period}</div>
-                `;
-                document.body.appendChild(statusElement);
-                
-                // 5秒后自动移除状态提示
-                setTimeout(() => {
-                    statusElement.remove();
-                }, 5000);
-                
-                // 计算频率数据
-                calculateNumberFrequency();
-                
-                // 更新UI（如果需要）
                 try {
-                    renderKl8HistoryData();
-                    renderNumberFrequency();
-                } catch (e) {
-                    console.log('UI渲染可能在模态框打开前调用，这是正常的:', e);
+                    // 直接使用备份数据
+                    const simpleCreateData = [
+                        { period: "2025274", numbers: ["02", "03", "10", "18", "26", "31", "33", "34", "46", "49", "50", "51", "54", "55", "60", "62", "74", "75", "76", "80"] },
+                        { period: "2025273", numbers: ["08", "09", "11", "13", "14", "18", "20", "24", "28", "30", "31", "32", "38", "39", "40", "46", "62", "64", "69", "70"] },
+
+                        { period: "2025272", numbers: ["03", "06", "09", "10", "11", "13", "14", "16", "20", "22", "25", "43", "47", "50", "60", "61", "62", "68", "73", "79"] },
+
+                        { period: "2025271", numbers: ["01", "03", "07", "15", "17", "20", "27", "37", "41", "42", "47", "48", "53", "54", "60", "62", "63", "68", "77", "78"] },
+                        { period: "2025270", numbers: ["02", "08", "10", "20", "21", "27", "28", "30", "33", "36", "43", "48", "49", "52", "60", "61", "64", "71", "75", "79"] },  
+                        { period: "2025269", numbers: ["01", "08", "10", "15", "19", "20", "24", "30", "33", "43", "49", "50", "56", "57", "60", "67", "70", "73", "78", "80"] },
+                        { period: "2025268", numbers: ["05", "12", "16", "18", "19", "26", "31", "33", "38", "39", "41", "42", "49", "54", "59", "64", "65", "70", "73", "77"] },
+                        { period: "2025267", numbers: ["08", "13", "20", "21", "25", "34", "37", "39", "45", "47", "50", "57", "58", "60", "65", "71", "72", "75", "78", "79"] },
+                        { period: "2025266", numbers: ["01", "05", "09", "13", "16", "17", "25", "28", "29", "33", "34", "38", "45", "47", "48", "55", "62", "71", "73", "78"] },
+                        { period: "2025265", numbers: ["02", "09", "11", "16", "18", "27", "28", "35", "36", "38", "49", "52", "54", "60", "62", "64", "66", "72", "77", "78"] },
+                        { period: "2025264", numbers: ["06", "10", "15", "16", "20", "24", "25", "28", "34", "35", "37", "38", "42", "44", "45", "49", "54", "66", "69", "80"] },
+                        { period: "2025263", numbers: ["04", "05", "11", "13", "14", "20", "23", "24", "27", "32", "33", "42", "45", "55", "58", "62", "64", "70", "79", "80"] },
+                        { period: "2025262", numbers: ["08", "10", "14", "19", "27", "31", "33", "40", "42", "44", "46", "47", "49", "54", "58", "60", "67", "70", "75", "77"] },
+                        { period: "2025261", numbers: ["03", "10", "15", "17", "19", "22", "23", "25", "31", "35", "36", "42", "60", "61", "62", "65", "70", "73", "76", "77"] },
+                        { period: "2025260", numbers: ["03", "08", "10", "11", "13", "16", "21", "24", "27", "38", "41", "48", "54", "58", "59", "61", "62", "66", "69", "71"] },
+                        { period: "2025259", numbers: ["04", "07", "09", "19", "20", "30", "33", "35", "44", "45", "48", "49", "50", "51", "52", "70", "71", "72", "74", "78"] },
+                        { period: "2025258", numbers: ["01", "05", "10", "12", "16", "23", "25", "28", "29", "36", "40", "46", "51", "55", "58", "64", "66", "71", "76", "80"] },
+                        { period: "2025257", numbers: ["01", "08", "13", "15", "22", "34", "36", "38", "42", "43", "49", "50", "51", "65", "66", "67", "70", "71", "79", "80"] },
+                        { period: "2025256", numbers: ["08", "13", "18", "29", "34", "35", "39", "41", "43", "45", "46", "47", "57", "64", "68", "71", "73", "74", "75", "78"] },
+                        { period: "2025255", numbers: ["05", "13", "15", "21", "25", "26", "27", "31", "37", "39", "46", "50", "54", "56", "57", "59", "65", "70", "78", "79"] },
+                        { period: "2025254", numbers: ["16", "18", "20", "29", "32", "36", "37", "41", "52", "53", "54", "55", "56", "57", "65", "69", "70", "74", "75", "76"] },
+                        { period: "2025253", numbers: ["03", "10", "20", "23", "27", "30", "32", "35", "44", "48", "50", "51", "53", "56", "57", "63", "65", "68", "70", "72"] },
+                        { period: "2025252", numbers: ["13", "18", "19", "26", "27", "30", "33", "37", "41", "43", "47", "49", "53", "58", "61", "64", "68", "71", "73", "76"] },
+                        { period: "2025251", numbers: ["01", "02", "04", "14", "15", "23", "25", "26", "27", "30", "36", "39", "42", "44", "46", "52", "55", "62", "65", "66"] },
+                        { period: "2025250", numbers: ["01", "02", "06", "16", "20", "21", "23", "26", "27", "29", "30", "34", "40", "43", "59", "63", "65", "71", "79", "80"] },
+                        { period: "2025249", numbers: ["01", "06", "07", "12", "13", "15", "21", "25", "27", "30", "36", "40", "41", "45", "55", "57", "67", "72", "73", "77"] },
+                        { period: "2025248", numbers: ["06", "10", "21", "22", "28", "29", "32", "33", "34", "37", "43", "49", "51", "52", "55", "56", "57", "59", "67", "80"] },
+                        { period: "2025247", numbers: ["01", "03", "05", "06", "10", "11", "14", "23", "25", "32", "35", "36", "50", "51", "57", "58", "65", "72", "73", "76"] },
+                        { period: "2025246", numbers: ["01", "04", "08", "11", "26", "27", "30", "37", "46", "53", "55", "57", "62", "64", "65", "69", "72", "78", "79", "80"] },
+                        { period: "2025245", numbers: ["02", "07", "08", "11", "17", "19", "21", "22", "26", "28", "31", "40", "43", "44", "53", "63", "71", "74", "76", "80"] },
+                        { period: "2025244", numbers: ["02", "03", "06", "10", "12", "16", "23", "25", "28", "29", "34", "35", "38", "42", "44", "47", "58", "64", "73", "80"] },
+                        { period: "2025243", numbers: ["01", "04", "07", "18", "22", "25", "29", "30", "34", "37", "43", "49", "51", "53", "54", "55", "57", "67", "75", "77"] },
+                        { period: "2025242", numbers: ["02", "08", "11", "13", "15", "16", "20", "21", "23", "26", "35", "53", "65", "66", "69", "72", "73", "78", "79", "80"] },
+                        { period: "2025241", numbers: ["03", "07", "12", "13", "16", "18", "20", "28", "37", "47", "48", "50", "53", "61", "63", "68", "69", "75", "76", "80"] },
+                        { period: "2025240", numbers: ["08", "09", "11", "12", "15", "27", "35", "36", "43", "45", "49", "50", "51", "61", "64", "65", "68", "72", "78", "79"] },
+                        { period: "2025239", numbers: ["02", "03", "10", "12", "15", "21", "22", "27", "34", "35", "37", "38", "49", "51", "55", "65", "66", "70", "71", "76"] }
+                    ];
+                    
+                    // 使用去重排序函数确保数据格式正确
+                    localState.kl8HistoryData = deduplicateAndSortData(simpleCreateData);
+                    
+                    // 标记数据已加载
+                    localState.isDataLoaded = true;
+                    
+                    // 在页面上显示数据加载状态和统计信息
+                    const statusElement = document.createElement('div');
+                    statusElement.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
+                    statusElement.innerHTML = `
+                        <div>数据加载成功</div>
+                        <div>共加载 ${localState.kl8HistoryData.length} 期数据</div>
+                        <div>最早期号: ${localState.kl8HistoryData[localState.kl8HistoryData.length - 1].period}</div>
+                        <div>最新期号: ${localState.kl8HistoryData[0].period}</div>
+                    `;
+                    document.body.appendChild(statusElement);
+                    
+                    // 5秒后自动移除状态提示
+                    setTimeout(() => {
+                        statusElement.remove();
+                    }, 5000);
+                    
+                    // 计算频率数据
+                    calculateNumberFrequency();
+                    
+                    // 更新UI（如果需要）
+                    try {
+                        renderKl8HistoryData();
+                        renderNumberFrequency();
+                    } catch (e) {
+                        console.log('UI渲染可能在模态框打开前调用，这是正常的:', e);
+                    }
+                    
+                    // 尝试更新更新时间（如果元素存在）
+                    const updateTimeElement = document.getElementById('kl8HistoryUpdateTime');
+                    if (updateTimeElement) {
+                        updateTimeElement.textContent = '数据更新时间: ' + new Date().toLocaleString('zh-CN');
+                    }
+                    
+                    // 尝试更新模型状态（如果元素存在）
+                    const modelStatusElement = document.getElementById('modelStatus');
+                    const lastUpdatedElement = document.getElementById('lastUpdated');
+                    if (modelStatusElement) {
+                        modelStatusElement.textContent = '初始化完成';
+                        modelStatusElement.className = 'text-success';
+                    }
+                    if (lastUpdatedElement) {
+                        lastUpdatedElement.textContent = new Date().toLocaleString('zh-CN');
+                    }
+                    
+                    // 更新所有位置走势图
+                    updateAllPositionCharts();
+                    
+                    showNotification('历史数据加载成功', 'success');
+                    
+                    console.log('快乐8历史数据加载成功，共加载', localState.kl8HistoryData.length, '期数据');
+                    
+                    // 成功完成后解析Promise
+                    resolve(localState.kl8HistoryData);
+                } catch (error) {
+                    console.error('加载快乐8历史数据失败:', error);
+                    showNotification('加载数据失败', 'error');
+                    
+                    // 在页面上显示错误信息
+                    const errorElement = document.createElement('div');
+                    errorElement.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50';
+                    errorElement.innerHTML = `
+                        <div>数据加载失败</div>
+                        <div>${error.message}</div>
+                    `;
+                    document.body.appendChild(errorElement);
+                    
+                    // 5秒后自动移除错误提示
+                    setTimeout(() => {
+                        errorElement.remove();
+                    }, 5000);
+                    
+                    // 失败时拒绝Promise
+                    reject(error);
                 }
-                
-                // 尝试更新更新时间（如果元素存在）
-                const updateTimeElement = document.getElementById('kl8HistoryUpdateTime');
-                if (updateTimeElement) {
-                    updateTimeElement.textContent = '数据更新时间: ' + new Date().toLocaleString('zh-CN');
-                }
-                
-                // 尝试更新模型状态（如果元素存在）
-                const modelStatusElement = document.getElementById('modelStatus');
-                const lastUpdatedElement = document.getElementById('lastUpdated');
-                if (modelStatusElement) {
-                    modelStatusElement.textContent = '初始化完成';
-                    modelStatusElement.className = 'text-success';
-                }
-                if (lastUpdatedElement) {
-                    lastUpdatedElement.textContent = new Date().toLocaleString('zh-CN');
-                }
-                
-                // 更新所有位置走势图
-                updateAllPositionCharts();
-                
-                showNotification('历史数据加载成功', 'success');
-                
-                console.log('快乐8历史数据加载成功，共加载', localState.kl8HistoryData.length, '期数据');
-            } catch (error) {
-                console.error('加载快乐8历史数据失败:', error);
-                showNotification('加载数据失败', 'error');
-                
-                // 在页面上显示错误信息
-                const errorElement = document.createElement('div');
-                errorElement.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50';
-                errorElement.innerHTML = `
-                    <div>数据加载失败</div>
-                    <div>${error.message}</div>
-                `;
-                document.body.appendChild(errorElement);
-                
-                // 5秒后自动移除错误提示
-                setTimeout(() => {
-                    errorElement.remove();
-                }, 5000);
-            }
+            });
         }
     
     // 计算号码频率分布
@@ -2260,11 +2130,22 @@
             ];
             const borderColor = colors[position - 1];
             
-            // 创建图表实例
+            // 初始化位置图表对象
             if (!localState.positionCharts) {
                 localState.positionCharts = {};
             }
             
+            // 先销毁已存在的图表实例（如果有）
+            if (localState.positionCharts[position]) {
+                localState.positionCharts[position].destroy();
+            }
+            
+            // 另外，直接检查canvas元素上是否有Chart实例并销毁它
+            if (ctx && ctx.chart) {
+                ctx.chart.destroy();
+            }
+            
+            // 创建新的图表实例
             localState.positionCharts[position] = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -2300,6 +2181,38 @@
                                     return '位置' + position + ': ' + context.raw;
                                 }
                             }
+                        },
+                        // 自定义插件实现数字显示
+                        customLabels: {
+                            afterDatasetsDraw: function(chart) {
+                                const ctx = chart.ctx;
+                                chart.data.datasets.forEach(function(dataset, datasetIndex) {
+                                    const meta = chart.getDatasetMeta(datasetIndex);
+                                    if (!meta.hidden) {
+                                        meta.data.forEach(function(element, index) {
+                                            // 获取数据点的值
+                                            const value = dataset.data[index];
+                                            if (value !== null && value !== undefined) {
+                                                // 获取数据点的位置
+                                                const x = element.x;
+                                                const y = element.y;
+                                                
+                                                // 设置样式
+                                                ctx.save();
+                                                ctx.font = 'bold 10px Arial';
+                                                ctx.fillStyle = '#000';
+                                                ctx.textAlign = 'center';
+                                                ctx.textBaseline = 'bottom';
+                                                
+                                                // 在数据点上方绘制数字
+                                                ctx.fillText(value, x, y - 10);
+                                                
+                                                ctx.restore();
+                                            }
+                                        });
+                                    }
+                                });
+                            }
                         }
                     },
                     scales: {
@@ -2327,8 +2240,10 @@
         
         // 初始化所有位置的走势图
         function initPositionCharts() {
-            // 创建图表实例数组
-            localState.positionCharts = {};
+            // 确保positionCharts对象存在
+            if (!localState.positionCharts) {
+                localState.positionCharts = {};
+            }
             
             // 初始化所有20个位置的走势图
             for (let i = 1; i <= 20; i++) {
@@ -2590,8 +2505,9 @@
             
             reader.onload = function(event) {
                 try {
-                    // 解析JSON文件
-                    const importedData = JSON.parse(event.target.result);
+                    // 解析JSON文件，确保正确处理UTF-8编码
+                    const result = event.target.result;
+                    const importedData = JSON.parse(result);
                     
                     // 验证数据格式
                     if (!Array.isArray(importedData)) {
@@ -3225,6 +3141,32 @@
                 });
             }
             
+            // 预测结果对比按钮事件
+            const predictResultCompareBtn = document.getElementById('predictResultCompareBtn');
+            if (predictResultCompareBtn) {
+                predictResultCompareBtn.addEventListener('click', function() {
+                    // 创建简单的选择界面
+                    const predictionHistory = loadPredictionHistory();
+                    const recentDraws = localState.kl8HistoryData || [];
+                    
+                    if (predictionHistory.length === 0) {
+                        showNotification('暂无预测历史记录', 'warning');
+                        return;
+                    }
+                    
+                    if (recentDraws.length === 0) {
+                        showNotification('暂无开奖数据', 'warning');
+                        return;
+                    }
+                    
+                    // 使用最近的预测和最近的开奖结果进行对比
+                    const latestPrediction = predictionHistory[predictionHistory.length - 1];
+                    const latestDraw = recentDraws[0]; // 假设最新的在前面
+                    
+                    showPredictionComparison(latestPrediction.id, latestDraw.period);
+                });
+            }
+            
             // 关闭相同号码对比模态框
             const closeSameNumbersModal = document.getElementById('closeSameNumbersModal');
             if (closeSameNumbersModal) {
@@ -3261,6 +3203,16 @@
                     updateAllPositionCharts(numPeriods);
                 });
             }
+            
+            // 关闭预测对比模态框
+            document.getElementById('closePredictionComparisonModal').addEventListener('click', function() {
+                document.getElementById('predictionComparisonModal').classList.add('hidden');
+            });
+            
+            // 关闭预测对比模态框（标题栏按钮）
+            document.getElementById('closePredictionComparisonModalHeader').addEventListener('click', function() {
+                document.getElementById('predictionComparisonModal').classList.add('hidden');
+            });
         }
         
         // 计算历史数据相同号码对比
@@ -3428,14 +3380,404 @@
             document.getElementById('sameNumbersModal').classList.remove('hidden');
         }
         
+        // 比较预测号码和开奖号码
+        function comparePredictionWithResult(prediction, actualNumbers) {
+            // 转换为集合以便快速查找
+            const actualSet = new Set(actualNumbers);
+            
+            // 分类预测号码
+            const matchedNumbers = [];  // 命中的号码
+            const missedNumbers = [];   // 未命中的号码
+            
+            // 检查每个预测号码是否命中
+            prediction.predictedNumbers.forEach(num => {
+                if (actualSet.has(num)) {
+                    matchedNumbers.push(num);
+                } else {
+                    missedNumbers.push(num);
+                }
+            });
+            
+            // 计算命中统计
+            const totalPredicted = prediction.predictedNumbers.length;
+            const matchedCount = matchedNumbers.length;
+            const accuracy = totalPredicted > 0 ? (matchedCount / totalPredicted * 100).toFixed(2) : 0;
+            
+            // 计算遗漏的开奖号码
+            const missedActualNumbers = actualNumbers.filter(num => !prediction.predictedNumbers.includes(num));
+            
+            return {
+                prediction: prediction,
+                actualNumbers: actualNumbers,
+                matchedNumbers: matchedNumbers,
+                matchedCount: matchedCount,
+                missedNumbers: missedNumbers,
+                missedActualNumbers: missedActualNumbers,
+                accuracy: parseFloat(accuracy),
+                totalPredicted: totalPredicted
+            };
+        }
+        
+        // 生成改进建议
+        function generateImprovementSuggestions(comparisonResult) {
+            const suggestions = [];
+            
+            // 基于准确率的建议
+            if (comparisonResult.accuracy < 30) {
+                suggestions.push("当前预测准确率较低，建议增加历史数据量以提高模型稳定性");
+            } else if (comparisonResult.accuracy < 50) {
+                suggestions.push("预测准确率中等，可以尝试调整预测算法参数");
+            } else {
+                suggestions.push("预测准确率良好，建议继续保持当前策略");
+            }
+            
+            // 基于遗漏号码的分析
+            const missedActualNumbers = comparisonResult.missedActualNumbers;
+            if (missedActualNumbers.length > 10) {
+                const recentFrequency = calculateNumberFrequencyInRecentDraws(missedActualNumbers, 5);
+                const hotNumbers = recentFrequency.filter(item => item.frequency > 1);
+                
+                if (hotNumbers.length > 3) {
+                    suggestions.push(`发现${hotNumbers.length}个热门号码被遗漏，建议下次预测时考虑这些号码: ${hotNumbers.slice(0, 5).map(item => item.number).join(', ')}`);
+                }
+            }
+            
+            // 基于分区的建议
+            const partitionStats = analyzeNumberPartitions(comparisonResult.prediction.predictedNumbers);
+            const actualPartitionStats = analyzeNumberPartitions(comparisonResult.actualNumbers);
+            
+            for (let i = 0; i < partitionStats.length; i++) {
+                const predictedCount = partitionStats[i].count;
+                const actualCount = actualPartitionStats[i].count;
+                const difference = Math.abs(predictedCount - actualCount);
+                
+                if (difference > 4) {  // 差异较大
+                    if (predictedCount > actualCount) {
+                        suggestions.push(`分区 ${partitionStats[i].name} 预测过多，实际只开出${actualCount}个号码，建议减少该区间预测数量`);
+                    } else {
+                        suggestions.push(`分区 ${partitionStats[i].name} 预测过少，实际开出${actualCount}个号码，建议增加该区间预测数量`);
+                    }
+                }
+            }
+            
+            return suggestions;
+        }
+        
+        // 计算号码在最近几期的出现频率
+        function calculateNumberFrequencyInRecentDraws(numbers, periodCount) {
+            if (!localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
+                return [];
+            }
+            
+            // 限制期数
+            const recentPeriods = localState.kl8HistoryData.slice(0, Math.min(periodCount, localState.kl8HistoryData.length));
+            
+            // 统计每个号码的出现次数
+            const frequencyMap = {};
+            numbers.forEach(num => {
+                frequencyMap[num] = 0;
+            });
+            
+            recentPeriods.forEach(period => {
+                period.numbers.forEach(num => {
+                    if (frequencyMap[num] !== undefined) {
+                        frequencyMap[num]++;
+                    }
+                });
+            });
+            
+            // 转换为数组并排序
+            return Object.entries(frequencyMap)
+                .map(([number, frequency]) => ({ number, frequency }))
+                .sort((a, b) => b.frequency - a.frequency);
+        }
+        
+        // 分析号码分区统计
+        function analyzeNumberPartitions(numbers) {
+            const partitions = [
+                { name: "1-20", range: [1, 20], count: 0 },
+                { name: "21-40", range: [21, 40], count: 0 },
+                { name: "41-60", range: [41, 60], count: 0 },
+                { name: "61-80", range: [61, 80], count: 0 }
+            ];
+            
+            numbers.forEach(numStr => {
+                const num = parseInt(numStr);
+                for (const partition of partitions) {
+                    if (num >= partition.range[0] && num <= partition.range[1]) {
+                        partition.count++;
+                        break;
+                    }
+                }
+            });
+            
+            return partitions;
+        }
+        
+        // 渲染预测与开奖号码对比结果
+        function renderPredictionComparison(comparisonResult, suggestions) {
+            const contentElement = document.getElementById('predictionComparisonContent');
+            if (!contentElement) return;
+            
+            let html = `
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-2">预测详情</h3>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <p class="text-sm text-blue-700 mb-1">预测时间</p>
+                            <p class="text-xl font-bold text-blue-900">${new Date(comparisonResult.prediction.timestamp).toLocaleString('zh-CN')}</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <p class="text-sm text-green-700 mb-1">预测方法</p>
+                            <p class="text-xl font-bold text-green-900">${getMethodDisplayName(comparisonResult.prediction.method)}</p>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <p class="text-sm text-purple-700 mb-1">预测准确率</p>
+                            <p class="text-xl font-bold text-purple-900">${comparisonResult.accuracy}%</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- 预测号码 -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">预测号码</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <div class="flex flex-wrap gap-2 mb-3">
+            `;
+            
+            // 渲染预测号码球（命中的高亮显示）
+            comparisonResult.prediction.predictedNumbers.forEach(number => {
+                let ballClass = 'bg-gray-100 text-gray-600';
+                const num = parseInt(number);
+                
+                if (comparisonResult.matchedNumbers.includes(number)) {
+                    // 命中的号码使用特殊颜色
+                    ballClass = 'bg-green-100 text-green-600 border-2 border-green-400';
+                } else {
+                    // 未命中的号码使用常规颜色
+                    if (num > 20 && num <= 40) ballClass = 'bg-gray-100 text-gray-600';
+                    else if (num > 40 && num <= 60) ballClass = 'bg-gray-100 text-gray-600';
+                    else if (num > 60) ballClass = 'bg-gray-100 text-gray-600';
+                }
+                
+                html += `
+                    <div class="${ballClass} w-10 h-10 rounded-full flex items-center justify-center font-medium">
+                        ${number}
+                    </div>
+                `;
+            });
+            
+            html += `
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 开奖号码 -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">开奖号码</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <div class="flex flex-wrap gap-2 mb-3">
+            `;
+            
+            // 渲染开奖号码球（预测命中的高亮显示）
+            comparisonResult.actualNumbers.forEach(number => {
+                let ballClass = 'bg-blue-100 text-blue-600';
+                const num = parseInt(number);
+                
+                if (comparisonResult.matchedNumbers.includes(number)) {
+                    // 被预测命中的号码使用特殊颜色
+                    ballClass = 'bg-green-100 text-green-600 border-2 border-green-400';
+                } else {
+                    // 未被预测命中的号码使用常规颜色
+                    if (num > 20 && num <= 40) ballClass = 'bg-green-100 text-green-600';
+                    else if (num > 40 && num <= 60) ballClass = 'bg-yellow-100 text-yellow-600';
+                    else if (num > 60) ballClass = 'bg-red-100 text-red-600';
+                }
+                
+                html += `
+                    <div class="${ballClass} w-10 h-10 rounded-full flex items-center justify-center font-medium">
+                        ${number}
+                    </div>
+                `;
+            });
+            
+            html += `
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- 命中号码 -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">命中号码 (${comparisonResult.matchedCount}个)</h3>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <div class="flex flex-wrap gap-2">
+            `;
+            
+            // 渲染命中号码
+            if (comparisonResult.matchedNumbers.length > 0) {
+                comparisonResult.matchedNumbers.forEach(number => {
+                    html += `
+                        <div class="bg-green-100 text-green-600 w-10 h-10 rounded-full flex items-center justify-center font-medium">
+                            ${number}
+                        </div>
+                    `;
+                });
+            } else {
+                html += `<p class="text-gray-500">暂无命中号码</p>`;
+            }
+            
+            html += `
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 遗漏的开奖号码 -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">遗漏的开奖号码 (${comparisonResult.missedActualNumbers.length}个)</h3>
+                        <div class="bg-yellow-50 p-4 rounded-lg">
+                            <div class="flex flex-wrap gap-2">
+            `;
+            
+            // 渲染遗漏的开奖号码
+            comparisonResult.missedActualNumbers.slice(0, 20).forEach(number => {
+                let ballClass = 'bg-blue-100 text-blue-600';
+                const num = parseInt(number);
+                
+                if (num > 20 && num <= 40) ballClass = 'bg-green-100 text-green-600';
+                else if (num > 40 && num <= 60) ballClass = 'bg-yellow-100 text-yellow-600';
+                else if (num > 60) ballClass = 'bg-red-100 text-red-600';
+                
+                html += `
+                    <div class="${ballClass} w-8 h-8 rounded-full flex items-center justify-center font-medium text-sm">
+                        ${number}
+                    </div>
+                `;
+            });
+            
+            html += `
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 分区分析 -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-4">分区分析</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white rounded-lg overflow-hidden">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">分区</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">预测数量</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">实际数量</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">差异</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+            `;
+            
+            // 渲染分区统计
+            const predictedPartitions = analyzeNumberPartitions(comparisonResult.prediction.predictedNumbers);
+            const actualPartitions = analyzeNumberPartitions(comparisonResult.actualNumbers);
+            
+            for (let i = 0; i < predictedPartitions.length; i++) {
+                const predicted = predictedPartitions[i];
+                const actual = actualPartitions[i];
+                const difference = Math.abs(predicted.count - actual.count);
+                let diffClass = 'text-gray-600';
+                
+                if (difference > 4) diffClass = 'text-red-600';
+                else if (difference > 2) diffClass = 'text-yellow-600';
+                
+                html += `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm text-gray-900">${predicted.name}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900">${predicted.count}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900">${actual.count}</td>
+                        <td class="px-4 py-3 text-sm ${diffClass} font-medium">${difference}</td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 改进建议 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">预测改进建议</h3>
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <ul class="list-disc pl-5 space-y-2">
+            `;
+            
+            // 渲染改进建议
+            if (suggestions.length > 0) {
+                suggestions.forEach(suggestion => {
+                    html += `<li class="text-blue-800">${suggestion}</li>`;
+                });
+            } else {
+                html += `<li class="text-gray-500">暂无建议</li>`;
+            }
+            
+            html += `
+                        </ul>
+                    </div>
+                </div>
+            `;
+            
+            contentElement.innerHTML = html;
+            
+            // 显示模态框
+            document.getElementById('predictionComparisonModal').classList.remove('hidden');
+        }
+        
+        // 显示预测与开奖号码对比
+        function showPredictionComparison(predictionId, actualPeriod) {
+            // 加载预测历史
+            const predictionHistory = loadPredictionHistory();
+            
+            // 查找指定预测
+            const prediction = predictionHistory.find(p => p.id === predictionId);
+            if (!prediction) {
+                showNotification('未找到指定的预测记录', 'error');
+                return;
+            }
+            
+            // 查找开奖数据
+            const actualData = localState.kl8HistoryData?.find(item => item.period === actualPeriod);
+            if (!actualData) {
+                showNotification('未找到指定期号的开奖数据', 'error');
+                return;
+            }
+            
+            // 进行对比分析
+            const comparisonResult = comparePredictionWithResult(prediction, actualData.numbers);
+            
+            // 生成改进建议
+            const suggestions = generateImprovementSuggestions(comparisonResult);
+            
+            // 渲染结果
+            renderPredictionComparison(comparisonResult, suggestions);
+        }
+        
         // 初始化页面
         function initPage() {
-            // 加载历史数据
-            loadKl8HistoryData();
-            
             // 初始化事件监听器
             bindEventListeners();
             initEventListeners();
+            
+            // 加载历史数据
+            loadKl8HistoryData();
+            
+            // 使用setTimeout确保在数据加载后再初始化走势图
+            setTimeout(() => {
+                initPositionCharts();
+            }, 100);
         }
         
         // 页面加载完成后初始化
@@ -3486,6 +3828,31 @@
             </div>
             <div class="p-5 border-t border-gray-200 flex justify-end">
                 <button id="closeSameNumbersModal" class="bg-gray-200 hover:bg-gray-300 text-dark px-4 py-2 rounded-md transition-all" title="关闭">
+                    关闭
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 预测号码和开奖号码对比模态框 -->
+    <div id="predictionComparisonModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-dark">预测号码与开奖号码对比分析</h2>
+                <button id="closePredictionComparisonModalHeader" class="text-gray-400 hover:text-gray-500 focus:outline-none" title="关闭">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5">
+                <div id="predictionComparisonContent">
+                    <!-- 内容将通过JavaScript动态生成 -->
+                    <div class="flex items-center justify-center h-40 text-gray-400">
+                        <i class="fa fa-spinner fa-spin mr-2"></i> 加载中...
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 flex justify-end">
+                <button id="closePredictionComparisonModal" class="bg-gray-200 hover:bg-gray-300 text-dark px-4 py-2 rounded-md transition-all" title="关闭">
                     关闭
                 </button>
             </div>
