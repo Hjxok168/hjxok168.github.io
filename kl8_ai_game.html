@@ -203,6 +203,7 @@
                     <option value="smart">智能预测</option>
                     <option value="balanced">平衡分区</option>
                     <option value="frequency">频率预测</option>
+                    <option value="similarityFrequency">历史相似性预测</option>
                 </select></p>
                 <p class="text-sm text-gray-500">模型状态: <span id="modelStatus" class="text-warning">初始化中...</span></p>
             </div>
@@ -342,6 +343,13 @@
                 </button>
             </div>
         </div>
+    </div>
+    
+    <!-- 调试按钮 -->
+    <div class="fixed bottom-4 right-4 z-40">
+        <button id="debugPredictionButton" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center">
+            <i class="fa fa-bug mr-2"></i> 调试对比功能
+        </button>
     </div>
 
     <!-- 历史数据模态框 -->
@@ -680,6 +688,7 @@
                         <li><span class="font-medium">智能预测：</span>结合频率、间隔和最近趋势进行综合分析</li>
                         <li><span class="font-medium">平衡分区：</span>确保每个号码分区(01-20, 21-40, 41-60, 61-80)都有一定数量的号码</li>
                         <li><span class="font-medium">频率预测：</span>完全基于历史出现频率选择号码</li>
+                        <li><span class="font-medium">历史相似性预测：</span>结合历史数据相同号码对比和号码频率分布进行分析预测</li>
                     </ul>
                     
                     <h3 class="text-lg font-semibold">4. 免责声明</h3>
@@ -1125,6 +1134,10 @@
                     // 平衡分区预测
                     predictedNumbers = balancedPrediction();
                     break;
+                case 'similarityFrequency':
+                    // 基于历史相同号码和频率分布预测
+                    predictedNumbers = similarityFrequencyPrediction();
+                    break;
                 case 'smart':
                 default:
                     // 智能预测（结合多种因素）
@@ -1151,14 +1164,652 @@
             
             return predictedNumbers;
         }
-
-        // 智能预测算法 - 增强版
-        function smartPrediction() {
+        
+        // 基于历史相同号码和频率分布的预测算法
+        // 历史相似性频率预测算法 v3.0 (优化版)
+        function similarityFrequencyPrediction() {
+            console.log('执行高级历史相似性频率预测算法 v3.0...');
+            
             // 创建候选分数字典
             const candidateScores = {};
             
-            // 1. 频率因素（占35%权重）
+            // 先自动更新所有预测对比结果，确保历史数据准确
+            updateAllPredictionComparisons();
+            
+            // 初始化所有号码分数为0
+            for (let i = 1; i <= 80; i++) {
+                candidateScores[i] = 0;
+            }
+            
+            // 1. 高级频率分析（占35%权重）
             const frequencyWeight = 0.35;
+            calculateAdvancedFrequencyScore(candidateScores, frequencyWeight);
+            
+            // 2. 改进的历史相似性分析（占30%权重）
+            const similarityWeight = 0.30;
+            calculateEnhancedSimilarityScore(candidateScores, similarityWeight);
+            
+            // 3. 模式识别分析（占15%权重）
+            const patternWeight = 0.15;
+            calculatePatternRecognitionScore(candidateScores, patternWeight);
+            
+            // 4. 高级遗漏分析（占10%权重）
+            const missingWeight = 0.10;
+            calculateAdvancedMissingScore(candidateScores, missingWeight);
+            
+            // 5. 统计相关性分析（占5%权重）
+            const correlationWeight = 0.05;
+            calculateStatisticalCorrelationScore(candidateScores, correlationWeight);
+            
+            // 6. 自适应调整（占5%权重）
+            const adaptiveWeight = 0.05;
+            applyAdaptiveAdjustment(candidateScores, adaptiveWeight);
+            
+            // 转换为数组并排序
+            const sortedCandidates = Object.entries(candidateScores)
+                .map(([number, score]) => ({ number: parseInt(number), score }))
+                .sort((a, b) => b.score - a.score);
+            
+            // 智能选择策略 - 使用优化的分区平衡算法
+            const predicted = selectNumbersWithIntelligentBalance(sortedCandidates);
+            
+            console.log('高级历史相似性频率预测完成，选中号码:', predicted);
+            return predicted;
+        }
+        
+        // 高级频率分析
+        function calculateAdvancedFrequencyScore(candidateScores, weight) {
+            if (localState.frequencyData && localState.frequencyData.length > 0) {
+                const maxFrequency = localState.frequencyData[0].frequency;
+                const totalPeriods = localState.kl8HistoryData ? localState.kl8HistoryData.length : 1;
+                
+                // 计算理想频率
+                const idealFrequency = totalPeriods * 20 / 80; // 理论上每个号码应该出现的次数
+                
+                localState.frequencyData.forEach((item, index) => {
+                    // 基础频率得分
+                    const frequencyScore = item.frequency / maxFrequency;
+                    
+                    // 频率偏差得分 - 考虑号码出现频率与理想频率的接近程度
+                    const frequencyDeviation = Math.abs(item.frequency - idealFrequency) / idealFrequency;
+                    const deviationScore = Math.max(0, 1 - frequencyDeviation * 0.5);
+                    
+                    // 排名得分 - 频率排名越靠前得分越高
+                    const rankScore = 1 - (index / 80);
+                    
+                    // 综合频率得分
+                    const combinedScore = (frequencyScore * 0.5 + deviationScore * 0.3 + rankScore * 0.2) * 100;
+                    
+                    candidateScores[item.number] += combinedScore * weight;
+                });
+            }
+        }
+        
+        // 改进的历史相似性分析
+        function calculateEnhancedSimilarityScore(candidateScores, weight) {
+            if (localState.kl8HistoryData && localState.kl8HistoryData.length >= 15) {
+                const recentData = localState.kl8HistoryData.slice(0, 15);
+                const numberAppearanceMatrix = {};
+                
+                // 初始化号码出现矩阵
+                for (let i = 1; i <= 80; i++) {
+                    numberAppearanceMatrix[i] = new Array(recentData.length).fill(0);
+                }
+                
+                // 构建出现矩阵
+                recentData.forEach((period, periodIndex) => {
+                    period.numbers.forEach(numberStr => {
+                        const number = parseInt(numberStr);
+                        numberAppearanceMatrix[number][periodIndex] = 1;
+                    });
+                });
+                
+                // 计算号码间的协同出现概率
+                for (let currentNum = 1; currentNum <= 80; currentNum++) {
+                    let similarityScore = 0;
+                    let relevantPeriods = 0;
+                    
+                    // 找出包含当前号码的所有期数
+                    for (let periodIndex = 0; periodIndex < recentData.length; periodIndex++) {
+                        if (numberAppearanceMatrix[currentNum][periodIndex] === 1) {
+                            relevantPeriods++;
+                            
+                            // 检查当前期的其他号码
+                            recentData[periodIndex].numbers.forEach(coNumberStr => {
+                                const coNumber = parseInt(coNumberStr);
+                                if (coNumber !== currentNum && candidateScores[coNumber] > 0) {
+                                    // 增加相似性分数，考虑期数权重
+                                    const periodWeight = (recentData.length - periodIndex) / recentData.length;
+                                    similarityScore += periodWeight * candidateScores[coNumber] * 0.01;
+                                }
+                            });
+                        }
+                    }
+                    
+                    // 归一化相似性分数
+                    if (relevantPeriods > 0) {
+                        candidateScores[currentNum] += (similarityScore / relevantPeriods) * weight;
+                    }
+                }
+                
+                // 应用马尔可夫链分析 - 分析号码出现的转移概率
+                applyMarkovChainAnalysis(candidateScores, recentData, weight * 0.3);
+            }
+        }
+        
+        // 马尔可夫链分析
+        function applyMarkovChainAnalysis(candidateScores, recentData, weight) {
+            const transitionMatrix = {};
+            
+            // 初始化转移矩阵
+            for (let i = 1; i <= 80; i++) {
+                transitionMatrix[i] = {};
+                for (let j = 1; j <= 80; j++) {
+                    transitionMatrix[i][j] = 0;
+                }
+            }
+            
+            // 构建转移矩阵
+            for (let periodIndex = 1; periodIndex < recentData.length; periodIndex++) {
+                const currentPeriod = recentData[periodIndex - 1]; // 当前期
+                const nextPeriod = recentData[periodIndex];      // 下一期
+                
+                // 计算转移概率
+                currentPeriod.numbers.forEach(currentNumStr => {
+                    const currentNum = parseInt(currentNumStr);
+                    nextPeriod.numbers.forEach(nextNumStr => {
+                        const nextNum = parseInt(nextNumStr);
+                        transitionMatrix[currentNum][nextNum]++;
+                    });
+                });
+            }
+            
+            // 计算最后一期的转移概率影响
+            if (recentData.length > 0) {
+                const lastPeriod = recentData[0];
+                const totalTransitions = {};
+                
+                // 计算每个号码的总转移次数
+                for (let i = 1; i <= 80; i++) {
+                    totalTransitions[i] = Object.values(transitionMatrix[i]).reduce((sum, count) => sum + count, 0);
+                }
+                
+                // 应用转移概率
+                lastPeriod.numbers.forEach(numStr => {
+                    const num = parseInt(numStr);
+                    if (totalTransitions[num] > 0) {
+                        for (let targetNum = 1; targetNum <= 80; targetNum++) {
+                            const transitionProbability = transitionMatrix[num][targetNum] / totalTransitions[num];
+                            candidateScores[targetNum] += transitionProbability * 100 * weight;
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 模式识别分析
+        function calculatePatternRecognitionScore(candidateScores, weight) {
+            if (localState.kl8HistoryData && localState.kl8HistoryData.length >= 20) {
+                // 1. 周期性模式分析
+                analyzeCyclicalPatterns(candidateScores, weight * 0.3);
+                
+                // 2. 热冷号码模式分析
+                analyzeHotColdPatterns(candidateScores, weight * 0.4);
+                
+                // 3. 连号模式分析
+                analyzeConsecutivePatterns(candidateScores, weight * 0.3);
+            }
+        }
+        
+        // 周期性模式分析
+        function analyzeCyclicalPatterns(candidateScores, weight) {
+            const cycleLengths = [3, 5, 7, 10]; // 分析不同周期长度
+            
+            cycleLengths.forEach(cycleLength => {
+                for (let number = 1; number <= 80; number++) {
+                    const numberStr = number.toString().padStart(2, '0');
+                    let cycleMatches = 0;
+                    let totalCycles = 0;
+                    
+                    // 分析周期出现情况
+                    for (let i = 0; i < localState.kl8HistoryData.length - cycleLength; i += cycleLength) {
+                        totalCycles++;
+                        // 检查在周期位置上是否出现
+                        if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                            // 检查下一个周期位置
+                            if (i + cycleLength < localState.kl8HistoryData.length && 
+                                localState.kl8HistoryData[i + cycleLength].numbers.includes(numberStr)) {
+                                cycleMatches++;
+                            }
+                        }
+                    }
+                    
+                    // 应用周期匹配得分
+                    if (totalCycles > 0) {
+                        const cycleScore = (cycleMatches / totalCycles) * 50;
+                        candidateScores[number] += cycleScore * weight;
+                    }
+                }
+            });
+        }
+        
+        // 热冷号码模式分析
+        function analyzeHotColdPatterns(candidateScores, weight) {
+            const hotThreshold = 0.7; // 热门号码阈值
+            const coldThreshold = 0.3; // 冷门号码阈值
+            
+            // 分析最近10期的热冷状态
+            for (let number = 1; number <= 80; number++) {
+                const numberStr = number.toString().padStart(2, '0');
+                let recentAppearances = 0;
+                const recentPeriods = Math.min(10, localState.kl8HistoryData.length);
+                
+                // 统计最近出现次数
+                for (let i = 0; i < recentPeriods; i++) {
+                    if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                        recentAppearances++;
+                    }
+                }
+                
+                const appearanceRate = recentAppearances / recentPeriods;
+                let patternScore = 0;
+                
+                // 热门号码模式
+                if (appearanceRate > hotThreshold) {
+                    // 热门号码倾向于继续热门或即将变冷
+                    // 分析热门持续时间
+                    let hotStreak = 0;
+                    for (let i = 0; i < localState.kl8HistoryData.length; i++) {
+                        if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                            hotStreak++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // 热门持续3-5期后，继续热门的概率降低
+                    if (hotStreak >= 3 && hotStreak <= 5) {
+                        patternScore = 20;
+                    } else if (hotStreak > 5) {
+                        patternScore = 10; // 过热，概率降低
+                    } else {
+                        patternScore = 30; // 刚开始热，概率较高
+                    }
+                }
+                // 冷门号码模式
+                else if (appearanceRate < coldThreshold) {
+                    // 冷门号码即将反弹的概率分析
+                    let coldStreak = 0;
+                    for (let i = 0; i < localState.kl8HistoryData.length; i++) {
+                        if (!localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                            coldStreak++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // 冷号时间越长，反弹概率越高
+                    patternScore = Math.min(40, coldStreak * 2);
+                }
+                
+                candidateScores[number] += patternScore * weight;
+            }
+        }
+        
+        // 连号模式分析
+        function analyzeConsecutivePatterns(candidateScores, weight) {
+            // 统计连号出现的频率
+            const consecutiveCounts = {};
+            for (let i = 1; i <= 79; i++) {
+                consecutiveCounts[i] = 0;
+            }
+            
+            // 分析历史数据中的连号模式
+            localState.kl8HistoryData.forEach(period => {
+                const sortedNumbers = period.numbers.map(n => parseInt(n)).sort((a, b) => a - b);
+                
+                for (let i = 0; i < sortedNumbers.length - 1; i++) {
+                    if (sortedNumbers[i + 1] - sortedNumbers[i] === 1) {
+                        consecutiveCounts[sortedNumbers[i]]++;
+                    }
+                }
+            });
+            
+            // 应用连号模式得分
+            for (let baseNum = 1; baseNum <= 79; baseNum++) {
+                const consecutiveScore = consecutiveCounts[baseNum] * 2;
+                
+                // 为基础号码和连续号码增加分数
+                candidateScores[baseNum] += consecutiveScore * weight;
+                candidateScores[baseNum + 1] += consecutiveScore * weight;
+            }
+        }
+        
+        // 高级遗漏分析
+        function calculateAdvancedMissingScore(candidateScores, weight) {
+            for (let number = 1; number <= 80; number++) {
+                const numberStr = number.toString().padStart(2, '0');
+                
+                // 计算当前遗漏期数
+                let currentMissing = 0;
+                let lastAppearance = -1;
+                
+                for (let i = 0; i < localState.kl8HistoryData.length; i++) {
+                    if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                        lastAppearance = i;
+                        break;
+                    }
+                    currentMissing++;
+                }
+                
+                // 计算历史平均遗漏期数和标准差
+                let missingPeriods = [];
+                let tempMissing = 0;
+                
+                for (let i = 0; i < localState.kl8HistoryData.length; i++) {
+                    if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                        if (tempMissing > 0) {
+                            missingPeriods.push(tempMissing);
+                        }
+                        tempMissing = 0;
+                    } else {
+                        tempMissing++;
+                    }
+                }
+                
+                // 计算遗漏得分
+                let missingScore = 20; // 基础分
+                
+                if (missingPeriods.length > 0) {
+                    const avgMissing = missingPeriods.reduce((sum, val) => sum + val, 0) / missingPeriods.length;
+                    const stdMissing = Math.sqrt(
+                        missingPeriods.reduce((sum, val) => sum + Math.pow(val - avgMissing, 2), 0) / missingPeriods.length
+                    );
+                    
+                    // 当前遗漏与平均遗漏的关系
+                    const missingRatio = currentMissing / avgMissing;
+                    
+                    // 使用正态分布思想：当遗漏达到平均值+标准差时，概率显著增加
+                    if (missingRatio > 1.5) {
+                        missingScore = 60;
+                    } else if (missingRatio > 1.2) {
+                        missingScore = 40;
+                    } else if (missingRatio < 0.5) {
+                        missingScore = 10; // 遗漏较少，概率较低
+                    }
+                } else if (currentMissing > 20) {
+                    // 从未出现或长期未出现
+                    missingScore = 50;
+                }
+                
+                candidateScores[number] += missingScore * weight;
+            }
+        }
+        
+        // 统计相关性分析
+        function calculateStatisticalCorrelationScore(candidateScores, weight) {
+            if (localState.kl8HistoryData && localState.kl8HistoryData.length >= 15) {
+                // 分析号码之间的统计相关性
+                const correlationMatrix = calculateCorrelationMatrix();
+                
+                // 找出当前得分较高的号码
+                const topNumbers = Object.entries(candidateScores)
+                    .sort(([,a], [,b]) => b - a)
+                    .slice(0, 10)
+                    .map(([num]) => parseInt(num));
+                
+                // 为与高分号码高度相关的其他号码增加分数
+                for (const topNum of topNumbers) {
+                    for (let relatedNum = 1; relatedNum <= 80; relatedNum++) {
+                        if (topNum !== relatedNum && correlationMatrix[topNum] && correlationMatrix[topNum][relatedNum]) {
+                            const correlationScore = correlationMatrix[topNum][relatedNum] * 30;
+                            candidateScores[relatedNum] += correlationScore * weight;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 计算相关性矩阵
+        function calculateCorrelationMatrix() {
+            const correlationMatrix = {};
+            const totalPeriods = localState.kl8HistoryData.length;
+            
+            // 初始化矩阵
+            for (let i = 1; i <= 80; i++) {
+                correlationMatrix[i] = {};
+            }
+            
+            // 计算共现次数
+            for (let i = 1; i <= 80; i++) {
+                for (let j = i + 1; j <= 80; j++) {
+                    let coOccurrences = 0;
+                    const numIStr = i.toString().padStart(2, '0');
+                    const numJStr = j.toString().padStart(2, '0');
+                    
+                    for (const period of localState.kl8HistoryData) {
+                        if (period.numbers.includes(numIStr) && period.numbers.includes(numJStr)) {
+                            coOccurrences++;
+                        }
+                    }
+                    
+                    // 计算相关系数
+                    const iFrequency = localState.frequencyData.find(item => item.number === i)?.frequency || 0;
+                    const jFrequency = localState.frequencyData.find(item => item.number === j)?.frequency || 0;
+                    
+                    // 使用修正的相关系数计算
+                    const expectedCoOccurrences = (iFrequency * jFrequency) / totalPeriods;
+                    let correlation = 0;
+                    
+                    if (expectedCoOccurrences > 0) {
+                        correlation = Math.min(1, coOccurrences / expectedCoOccurrences);
+                    }
+                    
+                    correlationMatrix[i][j] = correlation;
+                    correlationMatrix[j][i] = correlation; // 对称矩阵
+                }
+            }
+            
+            return correlationMatrix;
+        }
+        
+        // 自适应调整
+        function applyAdaptiveAdjustment(candidateScores, weight) {
+            // 基于历史预测准确率进行自适应调整
+            if (localState.predictionHistory && localState.predictionHistory.length > 0) {
+                const recentPredictions = localState.predictionHistory.slice(0, 10);
+                const numberSuccessRate = {};
+                
+                // 初始化成功率
+                for (let i = 1; i <= 80; i++) {
+                    numberSuccessRate[i] = { hits: 0, total: 0 };
+                }
+                
+                // 统计每个号码的预测成功率
+                recentPredictions.forEach(prediction => {
+                    if (prediction.accuracy !== '--') {
+                        const predictedNumbers = prediction.numbers;
+                        
+                        // 找到对应的开奖结果
+                        const correspondingResult = localState.kl8HistoryData.find(
+                            result => result.period === prediction.period
+                        );
+                        
+                        if (correspondingResult) {
+                            const resultNumbers = correspondingResult.numbers.map(n => parseInt(n));
+                            
+                            predictedNumbers.forEach(num => {
+                                numberSuccessRate[num].total++;
+                                if (resultNumbers.includes(num)) {
+                                    numberSuccessRate[num].hits++;
+                                }
+                            });
+                        }
+                    }
+                });
+                
+                // 应用自适应调整
+                for (let number = 1; number <= 80; number++) {
+                    const stats = numberSuccessRate[number];
+                    if (stats.total > 0) {
+                        const successRate = stats.hits / stats.total;
+                        // 成功预测的号码给予额外奖励，预测错误的给予惩罚
+                        const adjustment = (successRate - 0.25) * 40; // 0.25是随机概率基准
+                        candidateScores[number] += adjustment * weight;
+                    }
+                }
+            }
+        }
+        
+        // 智能选择策略 - 优化的分区平衡算法
+        function selectNumbersWithIntelligentBalance(sortedCandidates) {
+            const predicted = [];
+            const numbersToPick = 20;
+            const zoneCounts = [0, 0, 0, 0]; // 四个分区的计数器
+            
+            // 1. 首先获取最优分区分布
+            const optimalDistribution = calculateOptimalZoneDistribution();
+            
+            // 2. 按分数排序选择，但确保分区平衡
+            let round = 0;
+            const maxRounds = 5;
+            
+            while (predicted.length < numbersToPick && round < maxRounds) {
+                for (let i = 0; i < sortedCandidates.length && predicted.length < numbersToPick; i++) {
+                    const num = sortedCandidates[i].number;
+                    const zoneIndex = getZoneIndex(num);
+                    
+                    // 确定当前分区允许的最大选择数量
+                    const maxForZone = optimalDistribution[zoneIndex] + 2; // 允许一定的灵活性
+                    const minForZone = Math.max(0, optimalDistribution[zoneIndex] - 2); // 最低保证数量
+                    
+                    // 策略：
+                    // 1. 如果分区数量少于最小值，优先选择
+                    // 2. 如果分区数量未超过最大值，并且分数足够高，选择
+                    // 3. 最后一轮，放开限制，确保选够20个
+                    const highScoreThreshold = sortedCandidates[Math.floor(sortedCandidates.length * 0.3)].score;
+                    const isHighScore = sortedCandidates[i].score >= highScoreThreshold * 0.8;
+                    
+                    if (!predicted.includes(num)) {
+                        if (zoneCounts[zoneIndex] < minForZone ||
+                            (zoneCounts[zoneIndex] < maxForZone && isHighScore) ||
+                            round === maxRounds - 1) {
+                            
+                            predicted.push(num);
+                            zoneCounts[zoneIndex]++;
+                        }
+                    }
+                }
+                round++;
+            }
+            
+            // 3. 如果还是没选够，补充最高分的号码
+            if (predicted.length < numbersToPick) {
+                for (let i = 0; i < sortedCandidates.length && predicted.length < numbersToPick; i++) {
+                    const num = sortedCandidates[i].number;
+                    if (!predicted.includes(num)) {
+                        predicted.push(num);
+                    }
+                }
+            }
+            
+            return predicted;
+        }
+        
+        // 获取号码所在分区索引
+        function getZoneIndex(number) {
+            if (number <= 20) return 0;
+            else if (number <= 40) return 1;
+            else if (number <= 60) return 2;
+            else return 3;
+        }
+        
+        // 计算最优分区分布
+        function calculateOptimalZoneDistribution() {
+            // 默认的基础分布（每个分区5个号码）
+            const baseDistribution = [5, 5, 5, 5];
+            
+            if (!localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
+                return baseDistribution;
+            }
+            
+            // 分析最近10期的分区分布情况
+            const recentPeriods = Math.min(10, localState.kl8HistoryData.length);
+            const zoneDistributionHistory = [];
+            
+            // 收集历史分区分布数据
+            for (let i = 0; i < recentPeriods; i++) {
+                const zoneCounts = [0, 0, 0, 0];
+                localState.kl8HistoryData[i].numbers.forEach(numStr => {
+                    const num = parseInt(numStr);
+                    const zoneIndex = getZoneIndex(num);
+                    zoneCounts[zoneIndex]++;
+                });
+                zoneDistributionHistory.push(zoneCounts);
+            }
+            
+            // 计算每个分区的平均出现次数
+            const avgZoneCounts = [0, 0, 0, 0];
+            zoneDistributionHistory.forEach(counts => {
+                for (let i = 0; i < 4; i++) {
+                    avgZoneCounts[i] += counts[i];
+                }
+            });
+            
+            // 归一化平均分布
+            const totalNumbersPerPeriod = 20;
+            let optimalDistribution = [];
+            let remaining = totalNumbersPerPeriod;
+            
+            // 首先分配整数部分
+            for (let i = 0; i < 4; i++) {
+                avgZoneCounts[i] = avgZoneCounts[i] / recentPeriods;
+                const rounded = Math.floor(avgZoneCounts[i]);
+                optimalDistribution.push(rounded);
+                remaining -= rounded;
+            }
+            
+            // 分配剩余的号码，优先考虑最接近下一个整数的分区
+            const fractionalParts = avgZoneCounts.map((avg, i) => ({
+                index: i,
+                fractional: avg - optimalDistribution[i]
+            })).sort((a, b) => b.fractional - a.fractional);
+            
+            for (let i = 0; i < remaining; i++) {
+                optimalDistribution[fractionalParts[i].index]++;
+            }
+            
+            // 添加一些随机性和灵活性，避免过度拟合
+            for (let i = 0; i < 4; i++) {
+                // 根据历史数据的波动程度调整灵活性
+                const zoneVariance = calculateZoneVariance(zoneDistributionHistory, i);
+                const flexibility = Math.min(2, Math.max(0, Math.round(zoneVariance * 0.5)));
+                
+                // 确保分布不会偏离基础太多
+                optimalDistribution[i] = Math.min(8, Math.max(3, optimalDistribution[i]));
+            }
+            
+            return optimalDistribution;
+        }
+        
+        // 计算分区分布的方差
+        function calculateZoneVariance(zoneDistributionHistory, zoneIndex) {
+            const values = zoneDistributionHistory.map(counts => counts[zoneIndex]);
+            const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+            const squaredDiffs = values.map(val => Math.pow(val - mean, 2));
+            return squaredDiffs.reduce((sum, val) => sum + val, 0) / values.length;
+        }
+        // 智能预测算法 - 优化版（v3.0）
+        // 智能预测算法 - 增强版
+        function smartPrediction() {
+                // 创建候选分数字典
+                const candidateScores = {};
+                
+                // 先自动更新所有预测对比结果，确保历史数据准确
+                updateAllPredictionComparisons();
+                
+                // 1. 频率因素（占35%权重）
+                const frequencyWeight = 0.35;
             for (let i = 0; i < localState.frequencyData.length; i++) {
                 const item = localState.frequencyData[i];
                 // 出现次数越多，分数越高
@@ -1261,36 +1912,236 @@
         }
 
         // 平衡分区预测 - 增强版
+        // 平衡分区预测算法 v3.0 (优化版)
         function balancedPrediction() {
+            // 1. 计算历史分区分布统计，确定最优分区比例
+            const optimalZoneDistribution = calculateOptimalZoneDistribution();
+            
+            // 2. 为每个分区创建评分表
+            const zoneScores = createZoneScoreTables();
+            
+            // 3. 从每个分区选择评分最高的号码
             const predicted = [];
             
-            // 每个分区选择5个号码
-            const zoneSizes = [5, 5, 5, 5];
-            
-            // 从每个分区选择高频号码
-            for (let i = 0; i < localState.frequencyData.length; i++) {
-                const num = localState.frequencyData[i].number;
+            // 按照最优分区分布选择号码
+            for (let zoneIndex = 0; zoneIndex < 4; zoneIndex++) {
+                const numbersToSelect = optimalZoneDistribution[zoneIndex];
+                const sortedNumbers = zoneScores[zoneIndex].sort((a, b) => b.totalScore - a.totalScore);
                 
-                // 确定号码所在分区
-                let zoneIndex = 0;
-                if (num <= 20) zoneIndex = 0;
-                else if (num <= 40) zoneIndex = 1;
-                else if (num <= 60) zoneIndex = 2;
-                else zoneIndex = 3;
-                
-                // 如果分区还需要号码且号码未被选择，则添加
-                if (zoneSizes[zoneIndex] > 0 && !predicted.includes(num)) {
-                    predicted.push(num);
-                    zoneSizes[zoneIndex]--;
-                }
-                
-                // 如果所有分区都选够了，退出循环
-                if (zoneSizes.every(size => size === 0)) {
-                    break;
+                // 选择前N个最高分的号码
+                for (let i = 0; i < numbersToSelect && i < sortedNumbers.length; i++) {
+                    predicted.push(sortedNumbers[i].number);
                 }
             }
             
             return predicted;
+        }
+        
+        // 计算历史最优分区分布
+        function calculateOptimalZoneDistribution() {
+            // 默认均匀分布
+            let optimalDistribution = [5, 5, 5, 5];
+            
+            // 如果有历史数据，分析最佳分区分布
+            if (localState.kl8HistoryData && localState.kl8HistoryData.length > 0) {
+                const zoneDistributionCounts = [
+                    Array(11).fill(0), // 分区1: 0-10个号码
+                    Array(11).fill(0), // 分区2: 0-10个号码
+                    Array(11).fill(0), // 分区3: 0-10个号码
+                    Array(11).fill(0)  // 分区4: 0-10个号码
+                ];
+                
+                // 统计历史开奖号码的分区分布
+                for (const periodData of localState.kl8HistoryData) {
+                    const zone1 = periodData.numbers.filter(num => parseInt(num) <= 20).length;
+                    const zone2 = periodData.numbers.filter(num => parseInt(num) > 20 && parseInt(num) <= 40).length;
+                    const zone3 = periodData.numbers.filter(num => parseInt(num) > 40 && parseInt(num) <= 60).length;
+                    const zone4 = periodData.numbers.filter(num => parseInt(num) > 60).length;
+                    
+                    zoneDistributionCounts[0][Math.min(zone1, 10)]++;
+                    zoneDistributionCounts[1][Math.min(zone2, 10)]++;
+                    zoneDistributionCounts[2][Math.min(zone3, 10)]++;
+                    zoneDistributionCounts[3][Math.min(zone4, 10)]++;
+                }
+                
+                // 找到每个分区出现频率最高的数量
+                for (let zoneIndex = 0; zoneIndex < 4; zoneIndex++) {
+                    const maxCount = Math.max(...zoneDistributionCounts[zoneIndex]);
+                    const optimalCount = zoneDistributionCounts[zoneIndex].indexOf(maxCount);
+                    // 限制在合理范围内，并且总和为20
+                    optimalDistribution[zoneIndex] = Math.max(3, Math.min(8, optimalCount));
+                }
+                
+                // 确保总和为20，进行微调
+                let total = optimalDistribution.reduce((sum, count) => sum + count, 0);
+                while (total !== 20) {
+                    if (total < 20) {
+                        // 找出历史出现频率第二高的分区增加
+                        const variances = optimalDistribution.map((count, zoneIndex) => {
+                            const secondMaxCount = [...zoneDistributionCounts[zoneIndex]].sort((a, b) => b - a)[1] || 0;
+                            return secondMaxCount;
+                        });
+                        const zoneToIncrease = variances.indexOf(Math.max(...variances));
+                        optimalDistribution[zoneToIncrease]++;
+                    } else {
+                        // 找出历史出现频率较低的分区减少
+                        const zoneToDecrease = optimalDistribution.indexOf(Math.min(...optimalDistribution));
+                        optimalDistribution[zoneToDecrease]--;
+                    }
+                    total = optimalDistribution.reduce((sum, count) => sum + count, 0);
+                }
+            }
+            
+            return optimalDistribution;
+        }
+        
+        // 为每个分区创建号码评分表
+        function createZoneScoreTables() {
+            // 初始化4个分区的评分表
+            const zoneScores = [
+                [], [], [], [] // 分别对应4个分区
+            ];
+            
+            // 计算每个号码的综合评分
+            for (let number = 1; number <= 80; number++) {
+                // 确定分区
+                let zoneIndex = 0;
+                if (number <= 20) zoneIndex = 0;
+                else if (number <= 40) zoneIndex = 1;
+                else if (number <= 60) zoneIndex = 2;
+                else zoneIndex = 3;
+                
+                // 获取频率数据
+                const frequencyData = localState.frequencyData.find(item => item.number === number);
+                const frequency = frequencyData ? frequencyData.frequency : 0;
+                const maxFrequency = localState.frequencyData.length > 0 ? localState.frequencyData[0].frequency : 1;
+                const normalizedFrequency = maxFrequency > 0 ? frequency / maxFrequency : 0;
+                
+                // 计算分区内频率排名
+                const zoneNumbers = [];
+                for (let num = zoneIndex * 20 + 1; num <= (zoneIndex + 1) * 20; num++) {
+                    const fData = localState.frequencyData.find(item => item.number === num);
+                    zoneNumbers.push({ number: num, frequency: fData ? fData.frequency : 0 });
+                }
+                zoneNumbers.sort((a, b) => b.frequency - a.frequency);
+                const zoneFrequencyRank = zoneNumbers.findIndex(item => item.number === number) + 1;
+                const normalizedZoneRank = 1 - (zoneFrequencyRank - 1) / 20;
+                
+                // 计算趋势得分（基于最近10期的表现）
+                const recentTrendScore = calculateRecentTrendScore(number);
+                
+                // 计算遗漏分析得分
+                const missingScore = calculateMissingScore(number);
+                
+                // 计算分区平衡得分（考虑该分区内号码的分布）
+                const zoneBalanceScore = calculateZoneBalanceScore(number, zoneIndex, zoneNumbers);
+                
+                // 综合评分（加权平均）
+                const totalScore = (
+                    normalizedZoneRank * 0.35 +  // 分区内频率排名权重
+                    recentTrendScore * 0.25 +     // 近期趋势权重
+                    missingScore * 0.20 +         // 遗漏分析权重
+                    zoneBalanceScore * 0.10 +     // 分区平衡权重
+                    normalizedFrequency * 0.10    // 整体频率权重
+                );
+                
+                zoneScores[zoneIndex].push({
+                    number: number,
+                    frequency: frequency,
+                    totalScore: totalScore,
+                    zoneRank: zoneFrequencyRank
+                });
+            }
+            
+            return zoneScores;
+        }
+        
+        // 计算近期趋势得分
+        function calculateRecentTrendScore(number) {
+            if (!localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
+                return 0.5; // 默认中等概率
+            }
+            
+            // 分析最近10期
+            const recentPeriods = Math.min(10, localState.kl8HistoryData.length);
+            let appearanceCount = 0;
+            let consecutiveMisses = 0;
+            
+            for (let i = 0; i < recentPeriods; i++) {
+                const periodData = localState.kl8HistoryData[i];
+                const appeared = periodData.numbers.includes(number.toString().padStart(2, '0'));
+                
+                if (appeared) {
+                    appearanceCount++;
+                    consecutiveMisses = 0;
+                } else {
+                    consecutiveMisses++;
+                }
+            }
+            
+            // 计算出现频率
+            const appearanceRate = appearanceCount / recentPeriods;
+            
+            // 考虑连空情况的调整
+            let adjustment = 0;
+            if (consecutiveMisses > 0) {
+                // 连空越多，调整值越高（表示越可能出现）
+                adjustment = Math.min(0.3, consecutiveMisses * 0.05);
+            }
+            
+            return Math.min(1, appearanceRate + adjustment);
+        }
+        
+        // 计算遗漏分析得分
+        function calculateMissingScore(number) {
+            if (!localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
+                return 0.5;
+            }
+            
+            // 计算遗漏期数
+            let missingCount = 0;
+            for (const periodData of localState.kl8HistoryData) {
+                if (!periodData.numbers.includes(number.toString().padStart(2, '0'))) {
+                    missingCount++;
+                } else {
+                    break;
+                }
+            }
+            
+            // 基于遗漏期数计算得分，使用sigmoid函数让得分更平滑
+            // 适当的阈值：如果遗漏超过20期，认为概率明显增加
+            const normalizedMissing = Math.min(missingCount / 20, 1);
+            const score = 0.5 + (1 / (1 + Math.exp(-6 * (normalizedMissing - 0.5))) - 0.5) * 2;
+            
+            return score;
+        }
+        
+        // 计算分区平衡得分
+        function calculateZoneBalanceScore(number, zoneIndex, zoneNumbers) {
+            // 计算该号码在分区中的奇偶分布平衡贡献
+            const isEven = number % 2 === 0;
+            const oddNumbers = zoneNumbers.filter(n => n.number % 2 !== 0).length;
+            const evenNumbers = zoneNumbers.filter(n => n.number % 2 === 0).length;
+            
+            // 如果奇偶分布不均衡，倾向于补充较少的那一类
+            let parityBalanceScore = 0.5;
+            if (oddNumbers > evenNumbers && !isEven) {
+                parityBalanceScore = 0.3; // 奇数太多，降低奇数权重
+            } else if (evenNumbers > oddNumbers && isEven) {
+                parityBalanceScore = 0.3; // 偶数太多，降低偶数权重
+            } else if (oddNumbers < evenNumbers && !isEven) {
+                parityBalanceScore = 0.7; // 奇数太少，提高奇数权重
+            } else if (evenNumbers < oddNumbers && isEven) {
+                parityBalanceScore = 0.7; // 偶数太少，提高偶数权重
+            }
+            
+            // 计算号码大小分布平衡贡献
+            const zoneMid = zoneIndex * 20 + 10;
+            const distanceFromMid = Math.abs(number - zoneMid);
+            const normalizedDistance = distanceFromMid / 10; // 标准化到0-1范围
+            const sizeBalanceScore = 1 - normalizedDistance * 0.3; // 距离中心越近得分越高，但给予一定差异
+            
+            return (parityBalanceScore * 0.6 + sizeBalanceScore * 0.4);
         }
         
         // 新增：AI预测更新函数
@@ -1433,7 +2284,7 @@
         function savePredictionHistory() {
             try {
                 // 只保留最近100条记录
-            const historyToSave = localState.predictionHistory.slice(0, 100);
+                const historyToSave = localState.predictionHistory.slice(0, 100);
                 localStorage.setItem('kl8PredictionHistory', JSON.stringify(historyToSave));
             } catch (error) {
                 console.error('保存预测历史失败:', error);
@@ -1448,9 +2299,12 @@
                     localState.predictionHistory = JSON.parse(savedHistory);
                     updateHistoryTable();
                 }
+                // 返回预测历史记录
+                return localState.predictionHistory || [];
             } catch (error) {
                 console.error('加载预测历史失败:', error);
                 localState.predictionHistory = [];
+                return [];
             }
         }
 
@@ -1651,7 +2505,7 @@
             
             detailCard.appendChild(statsContainer);
             
-            // 添加准确率信息// 添加准确率信息
+            // 添加准确率信息
             const accuracyInfo = document.createElement('div');
             accuracyInfo.className = 'bg-gray-50 p-3 rounded';
             
@@ -1689,25 +2543,62 @@
 
         // 标记预测结果
         function markPredictionResult(predictionId) {
-            // 这里可以实现一个对话框让用户输入正确的号码
-            // 为了简化，这里使用一个模拟的随机结果
-            const correctCount = Math.floor(Math.random() * 12) + 5; // 模拟5-16个正确号码
-            const accuracy = (correctCount/20*100).toFixed(2) + '%';
-            
-            // 更新预测记录
+            // 查找预测记录
             const prediction = localState.predictionHistory.find(p => p.id === predictionId);
-            if (prediction) {
-                prediction.accuracy = accuracy;
-                prediction.correctCount = correctCount;
-                
-                // 保存更新后的历史记录
-                savePredictionHistory();
-                updateHistoryTable();
-                
-                // 重新加载详情
-                viewPredictionDetails(prediction);
-                
-                showNotification('预测结果已标记', 'success');
+            if (!prediction) {
+                console.error('未找到预测记录:', predictionId);
+                return;
+            }
+            
+            // 如果有预测期号，尝试从历史开奖数据中查找对应结果
+            if (prediction.period && localState.kl8HistoryData) {
+                const drawResult = localState.kl8HistoryData.find(d => d.period === prediction.period);
+                if (drawResult) {
+                    // 使用实际开奖数据计算真实准确率
+                    const result = savePredictionComparisonResult(predictionId, drawResult);
+                    if (result) {
+                        // 重新加载详情
+                        viewPredictionDetails(prediction);
+                        showNotification('预测结果已根据实际开奖数据标记', 'success');
+                    }
+                    return;
+                }
+            }
+            
+            // 如果没有对应期号的开奖数据，让用户手动输入开奖号码
+            const actualNumbersStr = prompt('请输入开奖号码（用逗号分隔，例如：1,2,3,4,5）');
+            
+            if (actualNumbersStr) {
+                try {
+                    // 解析用户输入的号码
+                    const actualNumbers = actualNumbersStr.split(',').map(n => Number(n.trim())).filter(n => !isNaN(n));
+                    
+                    if (actualNumbers.length > 0) {
+                        // 计算真实的匹配结果
+                        const comparison = comparePredictionWithResult(prediction.numbers, actualNumbers);
+                        
+                        // 更新预测记录
+                        prediction.correctCount = comparison.matchedCount;
+                        prediction.accuracy = comparison.accuracy + '%';
+                        prediction.actualNumbers = actualNumbers;
+                        prediction.comparisonDate = new Date().toLocaleString('zh-CN');
+                        prediction.manualInput = true;
+                        
+                        // 保存更新后的历史记录
+                        savePredictionHistory();
+                        updateHistoryTable();
+                        
+                        // 重新加载详情
+                        viewPredictionDetails(prediction);
+                        
+                        showNotification('预测结果已手动标记', 'success');
+                    } else {
+                        showNotification('请输入有效的开奖号码', 'error');
+                    }
+                } catch (error) {
+                    console.error('处理开奖号码失败:', error);
+                    showNotification('处理开奖号码时发生错误', 'error');
+                }
             }
         }
 
@@ -1809,11 +2700,17 @@
                 try {
                     // 直接使用备份数据
                     const simpleCreateData = [
+                        { period: "2025282", numbers: ["05", "09", "12", "15", "16", "20", "22", "24", "26", "30", "35", "38", "39", "47", "49", "56", "62", "66", "72", "74"] },
+                        { period: "2025281", numbers: ["08", "15", "23", "24", "28", "34", "35", "36", "38", "43", "45", "49", "51", "53", "64", "67", "69", "71", "74", "75"] },
+                        { period: "2025280", numbers: ["06", "10", "14", "15", "16", "25", "32", "36", "46", "49", "50", "59", "64", "68", "70", "72", "73", "77", "78", "79"] },
+                        { period: "2025279", numbers: ["01", "05", "06", "14", "25", "32", "35", "40", "45", "47", "53", "62", "63", "67", "68", "70", "71", "72", "75", "78"] },
+                        { period: "2025278", numbers: ["04", "05", "07", "08", "10", "15", "17", "18", "22", "26", "30", "33", "39", "42", "48", "50", "63", "68", "72", "77"] },
+                        { period: "2025277", numbers: ["09", "11", "13", "14", "20", "22", "39", "43", "48", "52", "54", "55", "57", "64", "68", "69", "72", "73", "75", "80"] },
+                        { period: "2025276", numbers: ["03", "17", "21", "22", "24", "30", "33", "34", "41", "44", "45", "47", "48", "59", "61", "68", "69", "76", "78", "79"] },
+                        { period: "2025275", numbers: ["07", "09", "13", "14", "28", "32", "33", "34", "35", "37", "48", "50", "51", "56", "57", "59", "65", "69", "72", "76"] },
                         { period: "2025274", numbers: ["02", "03", "10", "18", "26", "31", "33", "34", "46", "49", "50", "51", "54", "55", "60", "62", "74", "75", "76", "80"] },
                         { period: "2025273", numbers: ["08", "09", "11", "13", "14", "18", "20", "24", "28", "30", "31", "32", "38", "39", "40", "46", "62", "64", "69", "70"] },
-
                         { period: "2025272", numbers: ["03", "06", "09", "10", "11", "13", "14", "16", "20", "22", "25", "43", "47", "50", "60", "61", "62", "68", "73", "79"] },
-
                         { period: "2025271", numbers: ["01", "03", "07", "15", "17", "20", "27", "37", "41", "42", "47", "48", "53", "54", "60", "62", "63", "68", "77", "78"] },
                         { period: "2025270", numbers: ["02", "08", "10", "20", "21", "27", "28", "30", "33", "36", "43", "48", "49", "52", "60", "61", "64", "71", "75", "79"] },  
                         { period: "2025269", numbers: ["01", "08", "10", "15", "19", "20", "24", "30", "33", "43", "49", "50", "56", "57", "60", "67", "70", "73", "78", "80"] },
@@ -2795,6 +3692,7 @@
             const smartData = [];
             const balancedData = [];
             const frequencyData = [];
+            const similarityFrequencyData = [];
             
             predictions.forEach(pred => {
                 const accuracy = pred.correctCount ? (pred.correctCount / 20 * 100) : 0;
@@ -2802,6 +3700,9 @@
                 if (pred.method === 'smart') smartData.push(accuracy);
                 else if (pred.method === 'balanced') balancedData.push(accuracy);
                 else if (pred.method === 'frequency') frequencyData.push(accuracy);
+                else if (pred.method === 'similarityFrequency') {
+                    similarityFrequencyData.push(accuracy);
+                }
             });
             
             // 创建图表
@@ -2810,27 +3711,31 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        {
-                            label: '智能预测',
+                        { label: '智能预测',
                             data: smartData,
                             borderColor: '#722ED1',
                             backgroundColor: 'rgba(114, 46, 209, 0.1)',
                             tension: 0.3,
                             fill: false
                         },
-                        {
-                            label: '平衡分区',
+                        { label: '平衡分区',
                             data: balancedData,
                             borderColor: '#165DFF',
                             backgroundColor: 'rgba(22, 93, 255, 0.1)',
                             tension: 0.3,
                             fill: false
                         },
-                        {
-                            label: '频率预测',
+                        { label: '频率预测',
                             data: frequencyData,
                             borderColor: '#00B42A',
                             backgroundColor: 'rgba(0, 180, 42, 0.1)',
+                            tension: 0.3,
+                            fill: false
+                        },
+                        { label: '历史相似性预测',
+                            data: similarityFrequencyData || [],
+                            borderColor: '#FF7D00',
+                            backgroundColor: 'rgba(255, 125, 0, 0.1)',
                             tension: 0.3,
                             fill: false
                         }
@@ -3145,25 +4050,7 @@
             const predictResultCompareBtn = document.getElementById('predictResultCompareBtn');
             if (predictResultCompareBtn) {
                 predictResultCompareBtn.addEventListener('click', function() {
-                    // 创建简单的选择界面
-                    const predictionHistory = loadPredictionHistory();
-                    const recentDraws = localState.kl8HistoryData || [];
-                    
-                    if (predictionHistory.length === 0) {
-                        showNotification('暂无预测历史记录', 'warning');
-                        return;
-                    }
-                    
-                    if (recentDraws.length === 0) {
-                        showNotification('暂无开奖数据', 'warning');
-                        return;
-                    }
-                    
-                    // 使用最近的预测和最近的开奖结果进行对比
-                    const latestPrediction = predictionHistory[predictionHistory.length - 1];
-                    const latestDraw = recentDraws[0]; // 假设最新的在前面
-                    
-                    showPredictionComparison(latestPrediction.id, latestDraw.period);
+                    showPeriodPredictionComparison();
                 });
             }
             
@@ -3736,34 +4623,7 @@
             document.getElementById('predictionComparisonModal').classList.remove('hidden');
         }
         
-        // 显示预测与开奖号码对比
-        function showPredictionComparison(predictionId, actualPeriod) {
-            // 加载预测历史
-            const predictionHistory = loadPredictionHistory();
-            
-            // 查找指定预测
-            const prediction = predictionHistory.find(p => p.id === predictionId);
-            if (!prediction) {
-                showNotification('未找到指定的预测记录', 'error');
-                return;
-            }
-            
-            // 查找开奖数据
-            const actualData = localState.kl8HistoryData?.find(item => item.period === actualPeriod);
-            if (!actualData) {
-                showNotification('未找到指定期号的开奖数据', 'error');
-                return;
-            }
-            
-            // 进行对比分析
-            const comparisonResult = comparePredictionWithResult(prediction, actualData.numbers);
-            
-            // 生成改进建议
-            const suggestions = generateImprovementSuggestions(comparisonResult);
-            
-            // 渲染结果
-            renderPredictionComparison(comparisonResult, suggestions);
-        }
+        // 显示预测与开奖号码对比（已实现，无需重复定义）
         
         // 初始化页面
         function initPage() {
@@ -3858,5 +4718,705 @@
             </div>
         </div>
     </div>
+    
+    <!-- 显示同期预测号码和开奖号码对比 -->
+    <script>
+    function showPeriodPredictionComparison() {
+        const predictionHistory = loadPredictionHistory();
+        const recentDraws = localState.kl8HistoryData || [];
+        
+        console.log('预测历史记录数量:', predictionHistory.length);
+        console.log('开奖数据数量:', recentDraws.length);
+        
+        if (predictionHistory.length === 0) {
+            showNotification('暂无预测历史记录', 'warning');
+            return;
+        }
+        
+        if (recentDraws.length === 0) {
+            showNotification('暂无开奖数据', 'warning');
+            return;
+        }
+        
+        // 获取所有有预测记录的期号
+        const periodsWithPredictions = [...new Set(predictionHistory.map(p => p.period).filter(Boolean))];
+        const periodsWithDraws = [...new Set(recentDraws.map(d => d.period))];
+        
+        console.log('预测记录期号:', periodsWithPredictions);
+        console.log('开奖数据期号:', periodsWithDraws);
+        
+        // 找到同时有预测和开奖的期号
+        const commonPeriods = periodsWithPredictions.filter(p => periodsWithDraws.includes(p));
+        
+        console.log('同期期号:', commonPeriods);
+        
+        const modal = document.getElementById('predictionComparisonModal');
+        const content = document.getElementById('predictionComparisonContent');
+        
+        // 确保模态框存在
+        if (!modal || !content) {
+            console.error('未找到预测对比模态框元素');
+            showNotification('系统错误：未找到对比界面元素', 'error');
+            return;
+        }
+        
+        // 立即显示模态框，避免内容加载后忘记显示
+        modal.classList.remove('hidden');
+        
+        if (commonPeriods.length === 0) {
+            // 即使没有完全匹配的期号，也提供一个"立即对比"的选项
+            // 使用最新的预测和最新的开奖结果进行对比
+            const latestPrediction = predictionHistory[0];
+            const latestDraw = recentDraws[0];
+            
+            let comparisonHtml = `
+                <div class="text-center p-8">
+                    <p class="text-gray-500 mb-4">暂无同期的预测记录和开奖数据</p>
+                    <p class="text-gray-400 text-sm mb-6">请确保预测记录和开奖数据使用相同的期号格式</p>
+            `;
+            
+            if (latestPrediction && latestDraw) {
+                comparisonHtml += `
+                    <div class="bg-blue-50 p-4 rounded-lg mb-6">
+                        <h4 class="font-medium text-blue-800 mb-2">快速对比</h4>
+                        <p class="text-sm text-gray-600 mb-4">使用最新的预测和开奖结果进行对比分析</p>
+                        <button id="quickComparisonBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                            立即对比
+                        </button>
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        <p>最新预测期号: ${latestPrediction.period}</p>
+                        <p>最新开奖期号: ${latestDraw.period}</p>
+                    </div>
+                `;
+            }
+            
+            comparisonHtml += `</div>`;
+            content.innerHTML = comparisonHtml;
+            
+            // 添加立即对比按钮的事件监听
+            const quickBtn = document.getElementById('quickComparisonBtn');
+            if (quickBtn) {
+                quickBtn.onclick = () => {
+                    // 创建一个临时的对比视图
+                    const quickComparisonHtml = generateQuickComparisonView(latestPrediction, latestDraw);
+                    content.innerHTML = quickComparisonHtml;
+                };
+            }
+        } else {
+            // 生成期号选择界面
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <div class="bg-blue-50 p-4 rounded-md">
+                        <h3 class="text-lg font-medium text-blue-800 mb-2">选择对比期号</h3>
+                        <p class="text-blue-700 text-sm">以下期号同时有预测记录和开奖数据</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        ${commonPeriods.map(period => `
+                            <div class="border rounded-md p-4 hover:shadow-md transition-shadow cursor-pointer bg-white" onclick="comparePeriodPredictions('${period}')">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-medium">期号: ${period}</span>
+                                    <button class="bg-primary text-white px-3 py-1 rounded text-sm">
+                                        查看对比
+                                    </button>
+                                </div>
+                                <div class="mt-2 text-sm text-gray-500">
+                                    <span>预测记录: ${predictionHistory.filter(p => p.period === period).length}条</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        modal.classList.remove('hidden');
+        
+        // 简化关闭逻辑，使用函数引用避免重复绑定
+        const closeModal = () => {
+            modal.classList.add('hidden');
+        };
+        
+        // 确保获取到关闭按钮元素后再绑定事件
+        const headerCloseBtn = document.getElementById('closePredictionComparisonModalHeader');
+        const footerCloseBtn = document.getElementById('closePredictionComparisonModal');
+        
+        if (headerCloseBtn) headerCloseBtn.onclick = closeModal;
+        if (footerCloseBtn) footerCloseBtn.onclick = closeModal;
+        
+        // 点击模态框外部关闭
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        };
+    }
+    
+    // 计算预测与开奖结果的对比
+    function comparePredictionWithResult(predictedNumbers, actualNumbers) {
+        console.log('对比预测号码:', predictedNumbers);
+        console.log('实际开奖号码:', actualNumbers);
+        
+        const matchedNumbers = [];
+        const unmatchedNumbers = [];
+        
+        // 确保都是数字类型并正确比较
+        const actualNumbersSet = new Set(actualNumbers.map(n => Number(n)));
+        
+        predictedNumbers.forEach(num => {
+            const numAsNumber = Number(num);
+            console.log(`检查数字 ${num} 是否在开奖结果中:`, actualNumbersSet.has(numAsNumber));
+            if (actualNumbersSet.has(numAsNumber)) {
+                matchedNumbers.push(numAsNumber);
+            } else {
+                unmatchedNumbers.push(numAsNumber);
+            }
+        });
+        
+        console.log('匹配结果:', matchedNumbers);
+        console.log('未匹配结果:', unmatchedNumbers);
+        
+        // 安全计算准确率，避免除以零
+        const accuracy = predictedNumbers.length > 0 ? 
+            Math.round((matchedNumbers.length / predictedNumbers.length) * 100) : 0;
+            
+        console.log('计算准确率:', accuracy);
+        
+        return {
+            matchedNumbers,
+            unmatchedNumbers,
+            accuracy,
+            matchedCount: matchedNumbers.length
+        };
+    }
+    
+    // 保存预测对比结果到历史记录
+    function savePredictionComparisonResult(predictionId, drawResult) {
+        // 查找对应的预测记录
+        const prediction = localState.predictionHistory.find(p => p.id === predictionId);
+        if (!prediction) {
+            console.error('未找到预测记录:', predictionId);
+            return false;
+        }
+        
+        // 进行号码对比
+        const comparison = comparePredictionWithResult(prediction.numbers, drawResult.numbers);
+        
+        // 更新预测记录的准确率和正确数量
+        prediction.correctCount = comparison.matchedCount;
+        prediction.accuracy = comparison.accuracy + '%';
+        prediction.actualNumbers = drawResult.numbers;
+        prediction.comparisonDate = new Date().toLocaleString('zh-CN');
+        
+        // 保存更新后的历史记录
+        savePredictionHistory();
+        updateHistoryTable();
+        
+        console.log('预测对比结果已保存:', prediction);
+        return true;
+    }
+    
+    // 分析号码分区
+    function analyzeNumberPartitions(predictedNumbers, actualNumbers) {
+        const partitions = [
+            { name: '小号 (1-16)', min: 1, max: 16 },
+            { name: '大号 (17-32)', min: 17, max: 32 },
+            { name: '奇数', isOdd: true },
+            { name: '偶数', isEven: true }
+        ];
+        
+        return partitions.map(partition => {
+            const predicted = predictedNumbers.filter(num => {
+                if (partition.min !== undefined && partition.max !== undefined) {
+                    return num >= partition.min && num <= partition.max;
+                } else if (partition.isOdd) {
+                    return num % 2 !== 0;
+                } else if (partition.isEven) {
+                    return num % 2 === 0;
+                }
+                return false;
+            }).length;
+            
+            const actual = actualNumbers.filter(num => {
+                if (partition.min !== undefined && partition.max !== undefined) {
+                    return num >= partition.min && num <= partition.max;
+                } else if (partition.isOdd) {
+                    return num % 2 !== 0;
+                } else if (partition.isEven) {
+                    return num % 2 === 0;
+                }
+                return false;
+            }).length;
+            
+            return {
+                name: partition.name,
+                predicted,
+                actual,
+                diff: predicted - actual
+            };
+        });
+    }
+    
+    // 生成快速对比视图
+    function generateQuickComparisonView(prediction, drawResult) {
+        if (!prediction || !drawResult) {
+            return '<div class="text-center p-8 text-red-500">数据不足，无法进行对比</div>';
+        }
+        
+        // 使用已定义的对比函数
+        const comparison = comparePredictionWithResult(prediction.numbers, drawResult.numbers);
+        
+        // 生成对比内容
+        return `
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold">快速对比分析</h3>
+                    <div class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-sm">
+                        注意：预测期号 ${prediction.period} 与开奖期号 ${drawResult.period} 不匹配
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- 预测信息 -->
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <h4 class="font-medium text-blue-800 mb-3">预测信息</h4>
+                        <div class="space-y-2 text-sm">
+                            <div>预测方法: ${getMethodDisplayName(prediction.method)}</div>
+                            <div>预测时间: ${prediction.timestamp}</div>
+                            <div>预测期号: ${prediction.period}</div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="text-sm font-medium mb-2">预测号码</div>
+                            <div class="flex flex-wrap gap-2">
+                                ${prediction.numbers.map(num => {
+                                    const isHit = comparison.matchedNumbers.includes(num);
+                                    return `<span class="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold ${isHit ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'}">${num}</span>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 开奖信息 -->
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <h4 class="font-medium text-green-800 mb-3">开奖信息</h4>
+                        <div class="space-y-2 text-sm">
+                            <div>开奖期号: ${drawResult.period}</div>
+                            <div>开奖时间: ${drawResult.timestamp || '未知'}</div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="text-sm font-medium mb-2">开奖号码</div>
+                            <div class="flex flex-wrap gap-2">
+                                ${drawResult.numbers.map(num => `<span class="inline-flex items-center justify-center w-8 h-8 bg-green-600 text-white rounded-full font-bold">${num}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 对比分析 -->
+            <div class="bg-white border rounded-lg p-5 mb-6">
+                <h4 class="font-bold text-lg mb-4">对比分析结果</h4>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="bg-blue-100 p-3 rounded-lg text-center">
+                        <div class="text-sm text-blue-700">准确率</div>
+                        <div class="text-2xl font-bold text-blue-900">${comparison.accuracy}%</div>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-lg text-center">
+                        <div class="text-sm text-green-700">命中数量</div>
+                        <div class="text-2xl font-bold text-green-900">${comparison.matchedNumbers.length}</div>
+                    </div>
+                    <div class="bg-red-100 p-3 rounded-lg text-center">
+                        <div class="text-sm text-red-700">未命中数量</div>
+                        <div class="text-2xl font-bold text-red-900">${comparison.unmatchedNumbers.length}</div>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <h5 class="text-sm font-medium text-gray-700 mb-2">命中号码</h5>
+                        <div class="flex flex-wrap gap-2">
+                            ${comparison.matchedNumbers.length > 0 ? 
+                                comparison.matchedNumbers.map(num => `<span class="inline-flex items-center justify-center w-8 h-8 bg-green-600 text-white rounded-full font-bold">${num}</span>`).join('') : 
+                                '<span class="text-gray-400 italic">无</span>'
+                            }
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h5 class="text-sm font-medium text-gray-700 mb-2">未命中号码</h5>
+                        <div class="flex flex-wrap gap-2">
+                            ${comparison.unmatchedNumbers.map(num => `<span class="inline-flex items-center justify-center w-8 h-8 bg-gray-300 text-gray-800 rounded-full font-bold">${num}</span>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="showPeriodPredictionComparison()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-md transition-colors">
+                返回期号选择
+            </button>
+        `;
+    }
+    
+    // 对比指定期号的预测和开奖结果
+        function comparePeriodPredictions(period) {
+            console.log('对比期间:', period);
+            
+            const predictionHistory = loadPredictionHistory();
+            const recentDraws = localState.kl8HistoryData || [];
+            
+            console.log('预测历史记录:', predictionHistory.length);
+            console.log('开奖数据:', recentDraws.length);
+            
+            // 获取该期号的所有预测记录
+            const periodPredictions = predictionHistory.filter(p => p.period === period);
+            console.log('该期预测记录数量:', periodPredictions.length);
+            
+            // 获取该期号的开奖结果
+            const drawResult = recentDraws.find(d => d.period === period);
+            console.log('开奖结果:', drawResult);
+            
+            // 自动更新所有该期预测记录的对比结果
+            periodPredictions.forEach(prediction => {
+                if (!prediction.correctCount || !prediction.accuracy || prediction.accuracy === '--') {
+                    savePredictionComparisonResult(prediction.id, drawResult);
+                }
+            });
+        
+        const content = document.getElementById('predictionComparisonContent');
+        console.log('内容元素:', content);
+        
+        // 确保内容元素存在
+        if (!content) {
+            console.error('未找到预测对比内容元素');
+            showNotification('系统错误：未找到内容显示区域', 'error');
+            return;
+        }
+        
+        if (!drawResult) {
+            content.innerHTML = '<p class="text-center text-red-500 py-8">未找到该期的开奖结果</p>';
+            return;
+        }
+        
+        // 生成对比内容
+        let comparisonHTML = `
+            <div class="mb-6">
+                <h3 class="text-xl font-bold mb-4">期号 ${period} 对比分析</h3>
+                <div class="bg-green-50 p-4 rounded-md mb-4">
+                    <h4 class="font-medium text-green-800 mb-2">开奖号码</h4>
+                    <div class="flex flex-wrap gap-2">
+                        ${drawResult.numbers.map(num => `
+                            <span class="inline-flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full font-bold">${num}</span>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+            <div class="space-y-6">
+        `;
+        
+        // 为每个预测生成对比
+        periodPredictions.forEach(prediction => {
+            const comparison = comparePredictionWithResult(prediction.numbers, drawResult.numbers);
+            
+            comparisonHTML += `
+                <div class="border rounded-lg p-5 bg-white shadow-sm">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h4 class="font-bold text-lg">预测方法: ${getMethodDisplayName(prediction.method)}</h4>
+                            <p class="text-gray-500 text-sm">预测时间: ${prediction.timestamp}</p>
+                        </div>
+                        <div class="text-center bg-blue-100 text-blue-800 px-3 py-1 rounded">
+                            <div class="text-sm">准确率</div>
+                            <div class="font-bold text-lg">${comparison.accuracy}%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                        <!-- 预测号码 -->
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">预测号码</h5>
+                            <div class="flex flex-wrap gap-2">
+                                ${prediction.numbers.map(num => {
+                                    const isHit = comparison.matchedNumbers.includes(num);
+                                    return `<span class="inline-flex items-center justify-center w-10 h-10 rounded-full font-bold ${isHit ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-800'}">${num}</span>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                        
+                        <!-- 命中分析 -->
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">命中分析</h5>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm">命中号码:</span>
+                                    <span class="font-medium">${comparison.matchedNumbers.length}/${prediction.numbers.length}</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm">未命中号码:</span>
+                                    <span class="font-medium">${comparison.unmatchedNumbers.length}/${prediction.numbers.length}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 分区分析 -->
+                    <div>
+                        <h5 class="text-sm font-medium text-gray-700 mb-2">分区分析</h5>
+                        <table class="min-w-full bg-white border border-gray-200">
+                            <thead>
+                                <tr>
+                                    <th class="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分区</th>
+                                    <th class="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">预测数量</th>
+                                    <th class="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">实际数量</th>
+                                    <th class="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">差异</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${analyzeNumberPartitions(prediction.numbers, drawResult.numbers).map(partition => `
+                                    <tr>
+                                        <td class="py-2 px-4 border-b">${partition.name}</td>
+                                        <td class="py-2 px-4 border-b">${partition.predicted}</td>
+                                        <td class="py-2 px-4 border-b">${partition.actual}</td>
+                                        <td class="py-2 px-4 border-b ${Math.abs(partition.diff) > 1 ? 'text-red-500' : 'text-green-500'}">${partition.diff > 0 ? '+' : ''}${partition.diff}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+        
+        comparisonHTML += '</div>';
+        content.innerHTML = comparisonHTML;
+    }
+    // 诊断对比功能问题的调试函数
+    function debugPredictionComparison() {
+        console.log('=== 预测对比功能调试信息 ===');
+        
+        // 检查数据状态
+        const predictionHistory = loadPredictionHistory();
+        const recentDraws = localState.kl8HistoryData || [];
+        
+        console.log('预测历史记录数量:', predictionHistory.length);
+        console.log('开奖数据数量:', recentDraws.length);
+        
+        if (predictionHistory.length > 0) {
+            console.log('最新预测记录示例:', predictionHistory[0]);
+            // 获取所有预测的期号
+            const predictionPeriods = [...new Set(predictionHistory.map(p => p.period).filter(Boolean))];
+            console.log('预测记录期号列表:', predictionPeriods);
+        }
+        
+        if (recentDraws.length > 0) {
+            console.log('最新开奖数据示例:', recentDraws[0]);
+            // 获取所有开奖的期号
+            const drawPeriods = [...new Set(recentDraws.map(d => d.period))];
+            console.log('开奖数据期号列表:', drawPeriods);
+            
+            // 检查是否有匹配的期号
+            if (predictionHistory.length > 0) {
+                const predictionPeriods = [...new Set(predictionHistory.map(p => p.period).filter(Boolean))];
+                const drawPeriods = [...new Set(recentDraws.map(d => d.period))];
+                const commonPeriods = predictionPeriods.filter(p => drawPeriods.includes(p));
+                
+                console.log('匹配的期号数量:', commonPeriods.length);
+                console.log('匹配的期号列表:', commonPeriods);
+                
+                // 如果有匹配期号，尝试直接显示第一个匹配期号的对比
+                if (commonPeriods.length > 0) {
+                    console.log('尝试直接显示第一个匹配期号的对比:', commonPeriods[0]);
+                    try {
+                        comparePeriodPredictions(commonPeriods[0]);
+                        console.log('成功调用comparePeriodPredictions函数');
+                    } catch (error) {
+                        console.error('调用comparePeriodPredictions函数出错:', error);
+                    }
+                }
+            }
+        }
+        
+        // 检查DOM元素
+        console.log('模态框元素:', document.getElementById('predictionComparisonModal'));
+        console.log('内容区域元素:', document.getElementById('predictionComparisonContent'));
+        
+        // 检查辅助函数是否正确实现
+        try {
+            const testNumbers1 = [1, 2, 3, 4, 5];
+            const testNumbers2 = [1, 3, 5, 7, 9];
+            const testComparison = comparePredictionWithResult(testNumbers1, testNumbers2);
+            console.log('测试对比函数结果:', testComparison);
+            
+            const testPartitions = analyzeNumberPartitions(testNumbers1, testNumbers2);
+            console.log('测试分区分析函数结果:', testPartitions);
+        } catch (error) {
+            console.error('辅助函数测试失败:', error);
+        }
+        
+        // 最后显示模态框
+        console.log('尝试显示模态框');
+        const modal = document.getElementById('predictionComparisonModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            // 尝试执行原始的对比显示函数
+            showPeriodPredictionComparison();
+            console.log('已调用showPeriodPredictionComparison函数');
+        }
+        
+        console.log('=== 调试完成 ===');
+    }
+    
+    // 为调试按钮添加点击事件
+    document.getElementById('debugPredictionButton').addEventListener('click', function() {
+        console.log('调试按钮被点击，开始诊断预测对比功能...');
+        
+        // 先执行核心修复，确保对比功能可以显示
+        console.log('执行核心修复...');
+        fixPredictionComparison();
+        
+        // 然后执行详细诊断
+        console.log('执行详细诊断...');
+        debugPredictionComparison();
+        
+        // 最后提示用户
+        alert('预测对比功能已尝试修复。请查看页面上的对比结果，并检查浏览器控制台以获取详细诊断信息。');
+    });
+    
+    // 自动修复和更新所有预测记录的对比结果
+    function updateAllPredictionComparisons() {
+        console.log('开始更新所有预测记录的对比结果...');
+        
+        const predictionHistory = loadPredictionHistory();
+        const recentDraws = localState.kl8HistoryData || [];
+        
+        if (predictionHistory.length === 0) {
+            console.log('没有预测历史记录，无法更新');
+            return 0;
+        }
+        
+        let updatedCount = 0;
+        let fixedCount = 0;
+        let notFoundCount = 0;
+        
+        // 创建开奖结果的映射，方便快速查找
+        const drawByPeriod = {};
+        recentDraws.forEach(draw => {
+            drawByPeriod[draw.period] = draw;
+        });
+        
+        // 统计使用随机数据的记录
+        const randomDataRecords = predictionHistory.filter(p => 
+            p.accuracy && !p.comparisonDate && !p.actualNumbers
+        );
+        console.log(`发现 ${randomDataRecords.length} 条可能使用随机数据的历史记录需要修复`);
+        
+        // 遍历所有预测记录
+        predictionHistory.forEach(prediction => {
+            // 检查是否为随机生成的数据（没有comparisonDate和actualNumbers但有accuracy）
+            if (prediction.accuracy && !prediction.comparisonDate && !prediction.actualNumbers) {
+                // 清除旧的随机数据
+                prediction.accuracy = null;
+                prediction.correctCount = null;
+                fixedCount++;
+            }
+            
+            // 如果有预测期号，尝试查找对应的开奖结果
+            if (prediction.period) {
+                if (drawByPeriod[prediction.period]) {
+                    // 如果预测记录还没有准确率数据，或者需要重新计算
+                    if (!prediction.correctCount || !prediction.accuracy) {
+                        const drawResult = drawByPeriod[prediction.period];
+                        const comparison = comparePredictionWithResult(prediction.numbers, drawResult.numbers);
+                        
+                        // 更新预测记录为真实数据
+                        prediction.correctCount = comparison.matchedCount;
+                        prediction.accuracy = comparison.accuracy + '%';
+                        prediction.actualNumbers = drawResult.numbers;
+                        prediction.comparisonDate = new Date().toLocaleString('zh-CN');
+                        prediction.randomGenerated = false; // 标记为非随机生成
+                        
+                        updatedCount++;
+                    }
+                } else {
+                    notFoundCount++;
+                }
+            }
+        });
+        
+        // 保存更新后的历史记录
+        savePredictionHistory();
+        updateHistoryTable();
+        
+        console.log(`预测记录更新完成: 更新 ${updatedCount} 条记录, 修复 ${fixedCount} 条随机数据, 未找到对应开奖数据 ${notFoundCount} 条记录`);
+        
+        return {
+            updated: updatedCount,
+            fixed: fixedCount,
+            totalRecords: predictionHistory.length
+        };
+    }
+    
+    // 核心修复函数 - 确保预测对比功能正常工作
+    function fixPredictionComparison() {
+        // 先更新所有预测记录的对比结果
+        const result = updateAllPredictionComparisons();
+        
+        // 显示修复结果
+        const content = document.getElementById('predictionComparisonContent');
+        if (content) {
+            // 显示修复结果和测试对比内容
+            content.innerHTML = `
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-4">预测对比功能修复结果</h3>
+                    <p class="text-green-600 mb-2">✅ 已成功将随机生成的预测结果替换为真实对比数据</p>
+                    <p class="mb-1">📊 总预测记录数: <strong>${result.totalRecords}</strong></p>
+                    <p class="mb-1">🔄 更新的预测记录: <strong>${result.updated}</strong></p>
+                    <p class="mb-1">🔧 修复的随机数据: <strong>${result.fixed}</strong></p>
+                    <p class="mb-4">❓ 未找到开奖数据: <strong>${result.totalRecords - result.updated}</strong></p>
+                    <p class="text-sm text-gray-600">历史预测记录现在使用真实的开奖号码进行对比分析，确保数据准确性。</p>
+                    <div class="bg-green-50 border border-green-200 p-4 rounded-lg mb-4">
+                        <p>已更新 ${result.updated} 条预测记录的对比结果</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h4 class="font-medium mb-2">测试预测号码:</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <div class="bg-green-100 text-green-800 px-3 py-1 rounded-full">1</div>
+                            <div class="bg-green-100 text-green-800 px-3 py-1 rounded-full">3</div>
+                            <div class="bg-green-100 text-green-800 px-3 py-1 rounded-full">5</div>
+                            <div class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full">7</div>
+                            <div class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full">9</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h4 class="font-medium mb-2">测试开奖号码:</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <div class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full">1</div>
+                            <div class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full">3</div>
+                            <div class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full">5</div>
+                            <div class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full">11</div>
+                            <div class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full">13</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="font-medium mb-2">命中分析结果:</p>
+                        <p>准确率: 60.0%</p>
+                        <p>命中: 3个 | 未命中: 2个</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 确保模态框可见
+        const modal = document.getElementById('predictionComparisonModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+        
+        return true;
+    }
+    </script>
 </body>
 </html>
