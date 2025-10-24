@@ -27,9 +27,15 @@ git add .
 echo "提交更改..."
 git commit -m "更新网站内容 $(date '+%Y-%m-%d %H:%M:%S')"
 
+# 确保在main分支上
+echo "检查并切换到main分支..."
+if ! git show-ref --quiet refs/heads/main; then
+    git checkout -b main
+fi
+
 # 推送到GitHub
 echo "推送到GitHub..."
-git push -u origin main
+git push -u origin main --force
 
 echo "部署完成！网站地址：https://hjxok168.github.io"
 echo "注意：首次部署后可能需要几分钟时间让GitHub Pages生效"
