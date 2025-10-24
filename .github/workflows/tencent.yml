@@ -1,0 +1,164 @@
+# This workflow will build a docker container, publish and deploy it to Tencent Kubernetes Engine (TKE) when there is a push to the "main" branch.
+#
+# To configure this workflow:
+#1b9e72146f9471037b97b18a7e32c395e95095e4
+# 1. Ensure that your repository contains the necessary configuration for your Tencent Kubernetes Engine cluster,
+#    including deployment.yml, kustomization.yml, service.yml, etc.
+#
+# 2. Set up secrets in your workspace:
+#    - TENCENT_CLOUD_SECRET_ID with Tencent Cloud secret id
+#    - TENCENT_CLOUD_SECRET_KEY with Tencent Cloud secret key
+#    - TENCENT_CLOUD_ACCOUNT_ID with Tencent Cloud account id
+#    - TKE_REGISTRY_PASSWORD with TKE registry password
+#
+# 3. Change the values for the TKE_IMAGE_URL, TKE_REGION, TKE_CLUSTER_ID and DEPLOYMENT_NAME environment variables (below).
+
+name: Tencent Kubernetes Engine
+
+on:
+  push:
+    branches: [ "main" ]
+
+# Environment variables available to all jobs and steps in this workflow
+env:
+  TKE_IMAGE_URL: ccr.ccs.tencentyun.com/demo/mywebapp
+  TKE_REGION: ap-guangzhou
+  TKE_CLUSTER_ID: cls-mywebapp
+  DEPLOYMENT_NAME: tke-test
+
+permissions:
+  contents: read
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # Build
+    - name: Build Docker image
+      run: |
+        docker build -t ${TKE_IMAGE_URL}:${GITHUB_SHA} .
+
+    - name: Login TKE Registry
+      run: |
+        # 检查secrets是否配置
+        if [ -z "${{ secrets.TENCENT_CLOUD_ACCOUNT_ID }}" ] || [ -z "${{ secrets.TKE_REGISTRY_PASSWORD }}" ]; then
+          echo "警告: TENCENT_CLOUD_ACCOUNT_ID 或 TKE_REGISTRY_PASSWORD 未在GitHub Secrets中配置"
+          echo "请在GitHub仓库的Settings > Secrets and variables > Actions中添加这些secrets"
+          echo "如果是测试环境，可以跳过此步骤，否则镜像推送将会失败"
+          # 仅显示警告但不退出，允许流程继续执行其他步骤
+        else
+          # 提取registry域名部分，移除仓库名称
+          REGISTRY_DOMAIN=$(echo "${TKE_IMAGE_URL}" | cut -d'/' -f1)
+          echo "正在登录到: ${REGISTRY_DOMAIN}"
+          
+          # 执行登录命令
+          docker login -u "${{ secrets.TENCENT_CLOUD_ACCOUNT_ID }}" -p "${{ secrets.TKE_REGISTRY_PASSWORD }}" "${REGISTRY_DOMAIN}"
+        fi
+
+    # Push the Docker image to TKE Registry
+    - name: Publish
+      run: |
+        # 只有在secrets配置正确时才尝试推送
+        if [ -n "${{ secrets.TENCENT_CLOUD_ACCOUNT_ID }}" ] && [ -n "${{ secrets.TKE_REGISTRY_PASSWORD }}" ]; then
+          echo "正在推送镜像到TKE Registry..."
+          docker push ${TKE_IMAGE_URL}:${GITHUB_SHA}
+        else
+          echo "跳过镜像推送: Secrets未配置"
+        fi
+
+    - name: Set up Kustomize
+      run: |
+        curl -o kustomize --location https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
+        chmod u+x ./kustomize
+
+    - name: Check Tencent Cloud credentials
+      id: check_credentials
+      run: |
+        # 为测试目的，添加一个可选的测试模式标志
+        TEST_MODE=false
+        
+        # 检查腾讯云API密钥是否配置
+        if [ -z "${{ secrets.TENCENT_CLOUD_SECRET_ID }}" ] || [ -z "${{ secrets.TENCENT_CLOUD_SECRET_KEY }}" ]; then
+          if [ "$TEST_MODE" = "true" ]; then
+            # 测试模式：设置模拟凭据标志
+            echo "::warning::Running in TEST MODE with mock credentials"
+            echo "credentials_available=true" >> $GITHUB_OUTPUT
+            echo "test_mode=true" >> $GITHUB_OUTPUT
+          else
+            # 正常模式：凭据不可用
+            echo "::warning::Tencent Cloud API credentials not found in GitHub Secrets"
+            echo "需要在GitHub仓库的Settings > Secrets and variables > Actions中添加以下secrets："
+            echo "- TENCENT_CLOUD_SECRET_ID: 腾讯云账号的SecretId"
+            echo "- TENCENT_CLOUD_SECRET_KEY: 腾讯云账号的SecretKey"
+            echo "这些凭据用于连接TKE集群"
+            echo "credentials_available=false" >> $GITHUB_OUTPUT
+          fi
+        else
+          # 凭据可用
+          echo "credentials_available=true" >> $GITHUB_OUTPUT
+          echo "test_mode=false" >> $GITHUB_OUTPUT
+          echo "Tencent Cloud credentials are configured"
+        fi
+
+    - name: Set up ~/.kube/config for connecting TKE cluster
+      if: steps.check_credentials.outputs.credentials_available == 'true'
+      uses: TencentCloud/tke-cluster-credential-action@v1
+      # 使用环境变量传递密钥，避免直接在参数中引用可能为空的secrets
+      env:
+        TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENT_CLOUD_SECRET_ID }}
+        TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENT_CLOUD_SECRET_KEY }}
+      with:
+        # 直接从环境变量读取，而不是直接引用secrets
+        secret_id: ${{ env.TENCENTCLOUD_SECRET_ID }}
+        secret_key: ${{ env.TENCENTCLOUD_SECRET_KEY }}
+        tke_region: ${{ env.TKE_REGION }}
+        cluster_id: ${{ env.TKE_CLUSTER_ID }}
+
+    - name: Switch to TKE context
+      if: steps.check_credentials.outputs.credentials_available == 'true'
+      run: |
+        kubectl config use-context ${TKE_CLUSTER_ID}-context-default
+
+    # Deploy the Docker image to the TKE cluster
+    - name: Deploy
+      if: steps.check_credentials.outputs.credentials_available == 'true'
+      run: |
+        # 显示当前环境信息
+        echo "部署信息："
+        echo "- 镜像URL: ${TKE_IMAGE_URL}:${GITHUB_SHA}"
+        echo "- 集群ID: ${TKE_CLUSTER_ID}"
+        echo "- 区域: ${TKE_REGION}"
+        echo "- 部署名称: ${DEPLOYMENT_NAME}"
+        echo "- 测试模式: ${TEST_MODE:-false}"
+        
+        # 如果是测试模式，只显示将要执行的命令而不实际执行
+        if [ "${{ steps.check_credentials.outputs.test_mode }}" = "true" ]; then
+          echo "::warning::测试模式下，仅显示部署命令而不实际执行"
+          echo "命令1: ./kustomize edit set image ${TKE_IMAGE_URL}:${GITHUB_SHA}"
+          echo "命令2: ./kustomize build . | kubectl apply -f -"
+          echo "命令3: kubectl rollout status deployment/${DEPLOYMENT_NAME}"
+          echo "命令4: kubectl get services -o wide"
+        else
+          # 正常模式下执行部署命令
+          echo "执行实际部署..."
+          ./kustomize edit set image ${TKE_IMAGE_URL}:${GITHUB_SHA}
+          ./kustomize build . | kubectl apply -f -
+          kubectl rollout status deployment/${DEPLOYMENT_NAME}
+          kubectl get services -o wide
+        fi
+        
+    - name: Skip deployment
+      if: steps.check_credentials.outputs.credentials_available == 'false'
+      run: |
+        echo "::warning::跳过TKE集群部署，因为缺少腾讯云API凭据"
+        echo "若要完成部署，请在GitHub仓库的Settings中配置以下secrets："
+        echo "- TENCENT_CLOUD_SECRET_ID"
+        echo "- TENCENT_CLOUD_SECRET_KEY"
+        echo "- TENCENT_CLOUD_ACCOUNT_ID"
+        echo "- TKE_REGISTRY_PASSWORD"

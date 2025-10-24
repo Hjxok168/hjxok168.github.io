@@ -1,0 +1,464 @@
+/* 快乐8 AI预测游戏 - 样式文件 */
+
+/* 全局重置和基础样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: #F9FAFB;
+    color: #1D2129;
+    line-height: 1.6;
+    
+    /* 为了显示同步状态条留出空间 */
+    padding-top: 40px !important;
+}
+
+/* 数据同步状态条 */
+.data-sync-status {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background-color: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 9999;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    animation: slideDown 0.3s ease-out;
+}
+
+/* 同步指示器动画 */
+.sync-indicator {
+    width: var(--sync-indicator-size);
+    height: var(--sync-indicator-size);
+    background-color: var(--success);
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: var(--sync-indicator-animation);
+}
+
+/* 动画定义 */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+/* 样式加载成功指示器 */
+.styles-loaded .data-sync-status::after {
+    content: ' (样式已加载)';
+    color: #a5d6ff;
+    font-size: 12px;
+}
+
+/* 颜色变量 */
+:root {
+    --primary: #165DFF;
+    --secondary: #722ED1;
+    --success: #00B42A;
+    --warning: #FF7D00;
+    --danger: #F53F3F;
+    --info: #86909C;
+    --light: #F2F3F5;
+    --dark: #1D2129;
+    --white: #FFFFFF;
+    --gray-50: #F9FAFB;
+    --gray-100: #F3F4F6;
+    --gray-200: #E5E7EB;
+    --gray-300: #D1D5DB;
+    --gray-400: #9CA3AF;
+    --gray-500: #6B7280;
+    --gray-600: #4B5563;
+    --gray-700: #374151;
+    --gray-800: #1F2937;
+    --gray-900: #111827;
+    
+    /* 同步指示器样式 */
+    --sync-indicator-size: 8px;
+    --sync-indicator-animation: pulse 2s infinite;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--gray-100);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--gray-400);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-500);
+}
+
+/* 号码球样式 */
+.number-ball {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.number-ball:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.number-ball-selected {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.3), 0 4px 8px rgba(0, 0, 0, 0.2);
+    border: 2px solid var(--primary);
+}
+
+/* 号码球颜色分组 */
+.number-ball[data-group="1"] { background-color: #FF6B6B; }
+.number-ball[data-group="2"] { background-color: #4ECDC4; }
+.number-ball[data-group="3"] { background-color: #45B7D1; }
+.number-ball[data-group="4"] { background-color: #96CEB4; }
+.number-ball[data-group="5"] { background-color: #FECA57; }
+.number-ball[data-group="6"] { background-color: #FF9FF3; }
+.number-ball[data-group="7"] { background-color: #54A0FF; }
+.number-ball[data-group="8"] { background-color: #5F27CD; }
+
+/* 卡片悬浮效果 */
+.card-hover {
+    transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    transform: translateY(-2px);
+}
+
+/* 按钮样式增强 */
+button {
+    transition: all 0.2s ease;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+button:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* 输入框样式 */
+input, textarea, select {
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.1);
+}
+
+/* 模态框动画 */
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#historyModal, #kl8HistoryModal, #kl8HistoryEditModal, #addKl8HistoryModal {
+    animation: modalFadeIn 0.2s ease;
+}
+
+/* 加载动画 */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .number-ball {
+        width: 2rem;
+        height: 2rem;
+        font-size: 0.8rem;
+    }
+    
+    nav .flex.items-center.space-x-4 {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    nav button {
+        padding: 0.25rem 0.75rem;
+        font-size: 0.75rem;
+    }
+    
+    .grid-cols-8 {
+        grid-template-columns: repeat(5, 1fr);
+    }
+    
+    .grid-cols-10 {
+        grid-template-columns: repeat(5, 1fr);
+    }
+    
+    .grid-cols-16 {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
+/* 表格样式 */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+th {
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+tr:hover {
+    background-color: var(--gray-50);
+}
+
+/* 工具提示样式 */
+.tooltip {
+    position: relative;
+}
+
+.tooltip:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--gray-800);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 1000;
+    margin-bottom: 0.5rem;
+}
+
+.tooltip:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid var(--gray-800);
+    z-index: 1000;
+    margin-bottom: -1px;
+}
+
+/* 状态标签样式 */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-success {
+    background-color: rgba(0, 180, 42, 0.1);
+    color: var(--success);
+}
+
+.status-warning {
+    background-color: rgba(255, 125, 0, 0.1);
+    color: var(--warning);
+}
+
+.status-danger {
+    background-color: rgba(245, 63, 63, 0.1);
+    color: var(--danger);
+}
+
+.status-info {
+    background-color: rgba(134, 144, 156, 0.1);
+    color: var(--info);
+}
+
+/* 图表容器样式 */
+.chart-container {
+    position: relative;
+    height: 100%;
+    width: 100%;
+}
+
+/* 数字动画 */
+@keyframes countUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.count-animate {
+    animation: countUp 0.5s ease;
+}
+
+/* 渐入动画 */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease;
+}
+
+/* 历史记录样式 */
+.history-item {
+    padding: 1rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    background-color: var(--white);
+}
+
+.history-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.history-item-time {
+    font-size: 0.875rem;
+    color: var(--gray-500);
+}
+
+.history-item-method {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    background-color: rgba(114, 46, 209, 0.1);
+    color: var(--secondary);
+}
+
+.history-item-numbers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.history-item-accuracy {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* 位置图表分页按钮 */
+.position-page-btn {
+    transition: all 0.2s ease;
+}
+
+.position-page-btn.active {
+    background-color: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.position-page-btn:not(.active):hover {
+    background-color: var(--gray-50);
+}
+
+/* 打印样式 */
+@media print {
+    body {
+        background-color: white;
+    }
+    
+    nav, button, .hidden-print {
+        display: none !important;
+    }
+    
+    .container {
+        max-width: 100%;
+        padding: 0;
+    }
+}
+
+/* 无障碍增强 */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* 深色模式支持（预留） */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #2d2d2d;
+        --text-primary: #f5f5f5;
+        --text-secondary: #cccccc;
+        --border-color: #404040;
+    }
+    
+    /* 可以在这里添加深色模式的具体样式 */
+}
