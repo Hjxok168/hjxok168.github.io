@@ -15,6 +15,41 @@
     <link href="styles_fixed.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
     <script>
+        // 注册自定义标签插件
+        Chart.register({
+            id: 'customLabels',
+            afterDatasetsDraw: function(chart) {
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach(function(dataset, datasetIndex) {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    if (!meta.hidden) {
+                        meta.data.forEach(function(element, index) {
+                            // 获取数据点的值
+                            const value = dataset.data[index];
+                            if (value !== null && value !== undefined) {
+                                // 获取数据点的位置
+                                const x = element.x;
+                                const y = element.y;
+                                  
+                                // 设置样式 - 使用更大更清晰的字体
+                                ctx.save();
+                                ctx.font = 'bold 14px Arial';
+                                ctx.fillStyle = chart.options.plugins.customLabels?.color || '#000'; // 使用插件配置中的颜色
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                  
+                                // 直接在位置上绘制数字（替代圆点）
+                                ctx.fillText(value, x, y);
+                                  
+                                ctx.restore();
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    </script>
+    <script>
         // 全局状态管理
         const localState = {
             kl8HistoryData: [],
@@ -397,6 +432,9 @@
                         <button class="position-page-btn px-3 py-1.5 rounded-md text-sm border ${page === 4 ? 'bg-primary text-white border-primary' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}" data-page="4">
                             位置 16-20
                         </button>
+                        <button class="position-page-btn px-3 py-1.5 rounded-md text-sm border ${page === 5 ? 'bg-primary text-white border-primary' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}" data-page="5">
+                            末位号码
+                        </button>
                     </div>
                     
                     <!-- 图表容器 - 每页显示5个图表 -->
@@ -514,6 +552,60 @@
                             <div class="h-60 mb-4">
                                 <h4 class="text-base font-medium mb-2">第二十个号码（位置20）</h4>
                                 <canvas id="positionChart20"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- 第5页：末位号码 (默认隐藏) -->
+                        <div id="positionChartsPage5" class="hidden">
+                            <!-- 末位0 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为0的号码位置</h4>
+                                <canvas id="lastDigitChart0"></canvas>
+                            </div>
+                            <!-- 末位1 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为1的号码位置</h4>
+                                <canvas id="lastDigitChart1"></canvas>
+                            </div>
+                            <!-- 末位2 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为2的号码位置</h4>
+                                <canvas id="lastDigitChart2"></canvas>
+                            </div>
+                            <!-- 末位3 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为3的号码位置</h4>
+                                <canvas id="lastDigitChart3"></canvas>
+                            </div>
+                            <!-- 末位4 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为4的号码位置</h4>
+                                <canvas id="lastDigitChart4"></canvas>
+                            </div>
+                            <!-- 末位5 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为5的号码位置</h4>
+                                <canvas id="lastDigitChart5"></canvas>
+                            </div>
+                            <!-- 末位6 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为6的号码位置</h4>
+                                <canvas id="lastDigitChart6"></canvas>
+                            </div>
+                            <!-- 末位7 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为7的号码位置</h4>
+                                <canvas id="lastDigitChart7"></canvas>
+                            </div>
+                            <!-- 末位8 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为8的号码位置</h4>
+                                <canvas id="lastDigitChart8"></canvas>
+                            </div>
+                            <!-- 末位9 -->
+                            <div class="h-60 mb-4">
+                                <h4 class="text-base font-medium mb-2">末位为9的号码位置</h4>
+                                <canvas id="lastDigitChart9"></canvas>
                             </div>
                         </div>
                     </div>
@@ -703,7 +795,8 @@
         Object.assign(localState, {
             model: null,
             lastPrediction: null,
-            historyUpdateInterval: null // 添加定时器引用
+            historyUpdateInterval: null, // 添加定时器引用
+            lastDigitCharts: {} // 添加末位号码图表对象
         });
 
         // 启动历史数据自动更新
@@ -1166,8 +1259,9 @@
         }
         
         // 基于历史相同号码和频率分布的预测算法
+        // 历史相似性频率预测算法 v3.0 (优化版)
         function similarityFrequencyPrediction() {
-            console.log('开始执行基于历史相同号码和频率分布的预测...');
+            console.log('执行高级历史相似性频率预测算法 v3.0...');
             
             // 创建候选分数字典
             const candidateScores = {};
@@ -1177,130 +1271,532 @@
             
             // 初始化所有号码分数为0
             for (let i = 1; i <= 80; i++) {
-                const number = i.toString().padStart(2, '0');
-                candidateScores[number] = 0;
+                candidateScores[i] = 0;
             }
             
-            // 1. 频率因素（占40%权重）
-            const frequencyWeight = 0.4;
-            for (let i = 0; i < localState.frequencyData.length; i++) {
-                const item = localState.frequencyData[i];
-                // 出现次数越多，分数越高
-                const score = (80 - i) * frequencyWeight;
-                candidateScores[item.number] += score;
-            }
+            // 1. 高级频率分析（占35%权重）
+            const frequencyWeight = 0.35;
+            calculateAdvancedFrequencyScore(candidateScores, frequencyWeight);
             
-            // 2. 历史相同号码分析（占40%权重）
-            const similarityWeight = 0.4;
-            const historicalImpact = {};
+            // 2. 改进的历史相似性分析（占30%权重）
+            const similarityWeight = 0.30;
+            calculateEnhancedSimilarityScore(candidateScores, similarityWeight);
             
-            // 初始化历史影响分数
-            for (let i = 1; i <= 80; i++) {
-                const number = i.toString().padStart(2, '0');
-                historicalImpact[number] = 0;
-            }
+            // 3. 模式识别分析（占15%权重）
+            const patternWeight = 0.15;
+            calculatePatternRecognitionScore(candidateScores, patternWeight);
             
-            // 分析历史相同号码模式
-            if (localState.kl8HistoryData && localState.kl8HistoryData.length >= 10) {
-                // 分析最近10期数据
-                const recentData = localState.kl8HistoryData.slice(0, 10);
-                
-                // 对于每一期，分析它与前几期的相同号码模式
-                recentData.forEach((currentPeriod, currentIndex) => {
-                    // 计算历史权重：越近的期数权重越高
-                    const periodWeight = (10 - currentIndex) / 10;
-                    
-                    // 与前面的期数进行对比
-                    for (let j = currentIndex + 1; j < recentData.length; j++) {
-                        const previousPeriod = recentData[j];
-                        const commonNumbers = currentPeriod.numbers.filter(num => previousPeriod.numbers.includes(num));
-                        
-                        // 为共同出现的号码增加分数
-                        commonNumbers.forEach(num => {
-                            // 距离越近，权重越高
-                            const distanceWeight = 1 / (j - currentIndex);
-                            historicalImpact[num] += periodWeight * distanceWeight * 10;
-                        });
-                    }
-                });
-                
-                // 应用历史相同号码权重
-                for (let num in historicalImpact) {
-                    candidateScores[num] += historicalImpact[num] * similarityWeight;
-                }
-            }
+            // 4. 高级遗漏分析（占10%权重）
+            const missingWeight = 0.10;
+            calculateAdvancedMissingScore(candidateScores, missingWeight);
             
-            // 3. 平衡因素（占10%权重）
-            const balancedWeight = 0.1;
-            const zoneCounts = {1: 0, 2: 0, 3: 0, 4: 0};
+            // 5. 统计相关性分析（占5%权重）
+            const correlationWeight = 0.05;
+            calculateStatisticalCorrelationScore(candidateScores, correlationWeight);
             
-            // 4. 近期趋势分析（占5%权重）
-            const trendWeight = 0.05;
-            const recentTrend = {};
-            const recentPeriods = 5;
-            
-            // 初始化趋势分析
-            for (let i = 1; i <= 80; i++) {
-                const number = i.toString().padStart(2, '0');
-                recentTrend[number] = 0;
-            }
-            
-            // 分析最近几期号码出现情况
-            if (localState.kl8HistoryData && localState.kl8HistoryData.length >= recentPeriods) {
-                const recentData = localState.kl8HistoryData.slice(0, recentPeriods);
-                
-                recentData.forEach((periodData, periodIndex) => {
-                    // 近期数据权重递减
-                    const periodWeight = (recentPeriods - periodIndex) / recentPeriods;
-                    
-                    periodData.numbers.forEach(number => {
-                        recentTrend[number] += periodWeight;
-                    });
-                });
-            }
-            
-            // 应用趋势权重
-            for (let num in candidateScores) {
-                candidateScores[num] += recentTrend[num.toString().padStart(2, '0')] * trendWeight * 20;
-            }
-            
-            // 5. 随机因素（占5%权重）
-            for (let num in candidateScores) {
-                // 为每个号码添加一些随机因素
-                const randomFactor = Math.random() * 3;
-                candidateScores[num] += randomFactor;
-            }
+            // 6. 自适应调整（占5%权重）
+            const adaptiveWeight = 0.05;
+            applyAdaptiveAdjustment(candidateScores, adaptiveWeight);
             
             // 转换为数组并排序
             const sortedCandidates = Object.entries(candidateScores)
                 .map(([number, score]) => ({ number: parseInt(number), score }))
                 .sort((a, b) => b.score - a.score);
             
-            // 选择前20个号码
-            const predicted = [];
-            const numbersToPick = 20;
+            // 智能选择策略 - 使用优化的分区平衡算法
+            const predicted = selectNumbersWithIntelligentBalance(sortedCandidates);
             
-            // 确保每个分区至少有3个号码
-            while (predicted.length < numbersToPick) {
-                for (let i = 0; i < sortedCandidates.length && predicted.length < numbersToPick; i++) {
-                    const num = sortedCandidates[i].number;
+            console.log('高级历史相似性频率预测完成，选中号码:', predicted);
+            return predicted;
+        }
+        
+        // 高级频率分析
+        function calculateAdvancedFrequencyScore(candidateScores, weight) {
+            if (localState.frequencyData && localState.frequencyData.length > 0) {
+                const maxFrequency = localState.frequencyData[0].frequency;
+                const totalPeriods = localState.kl8HistoryData ? localState.kl8HistoryData.length : 1;
+                
+                // 计算理想频率
+                const idealFrequency = totalPeriods * 20 / 80; // 理论上每个号码应该出现的次数
+                
+                localState.frequencyData.forEach((item, index) => {
+                    // 基础频率得分
+                    const frequencyScore = item.frequency / maxFrequency;
                     
-                    // 确定号码所在分区
-                    let zone = 1;
-                    if (num <= 20) zone = 1;
-                    else if (num <= 40) zone = 2;
-                    else if (num <= 60) zone = 3;
-                    else zone = 4;
+                    // 频率偏差得分 - 考虑号码出现频率与理想频率的接近程度
+                    const frequencyDeviation = Math.abs(item.frequency - idealFrequency) / idealFrequency;
+                    const deviationScore = Math.max(0, 1 - frequencyDeviation * 0.5);
                     
-                    // 如果分区数量不足且号码未被选择，则添加
-                    if (zoneCounts[zone] < 8 && !predicted.includes(num)) {
-                        predicted.push(num);
-                        zoneCounts[zone]++;
+                    // 排名得分 - 频率排名越靠前得分越高
+                    const rankScore = 1 - (index / 80);
+                    
+                    // 综合频率得分
+                    const combinedScore = (frequencyScore * 0.5 + deviationScore * 0.3 + rankScore * 0.2) * 100;
+                    
+                    candidateScores[item.number] += combinedScore * weight;
+                });
+            }
+        }
+        
+        // 改进的历史相似性分析
+        function calculateEnhancedSimilarityScore(candidateScores, weight) {
+            if (localState.kl8HistoryData && localState.kl8HistoryData.length >= 15) {
+                const recentData = localState.kl8HistoryData.slice(0, 15);
+                const numberAppearanceMatrix = {};
+                
+                // 初始化号码出现矩阵
+                for (let i = 1; i <= 80; i++) {
+                    numberAppearanceMatrix[i] = new Array(recentData.length).fill(0);
+                }
+                
+                // 构建出现矩阵
+                recentData.forEach((period, periodIndex) => {
+                    period.numbers.forEach(numberStr => {
+                        const number = parseInt(numberStr);
+                        numberAppearanceMatrix[number][periodIndex] = 1;
+                    });
+                });
+                
+                // 计算号码间的协同出现概率
+                for (let currentNum = 1; currentNum <= 80; currentNum++) {
+                    let similarityScore = 0;
+                    let relevantPeriods = 0;
+                    
+                    // 找出包含当前号码的所有期数
+                    for (let periodIndex = 0; periodIndex < recentData.length; periodIndex++) {
+                        if (numberAppearanceMatrix[currentNum][periodIndex] === 1) {
+                            relevantPeriods++;
+                            
+                            // 检查当前期的其他号码
+                            recentData[periodIndex].numbers.forEach(coNumberStr => {
+                                const coNumber = parseInt(coNumberStr);
+                                if (coNumber !== currentNum && candidateScores[coNumber] > 0) {
+                                    // 增加相似性分数，考虑期数权重
+                                    const periodWeight = (recentData.length - periodIndex) / recentData.length;
+                                    similarityScore += periodWeight * candidateScores[coNumber] * 0.01;
+                                }
+                            });
+                        }
                     }
+                    
+                    // 归一化相似性分数
+                    if (relevantPeriods > 0) {
+                        candidateScores[currentNum] += (similarityScore / relevantPeriods) * weight;
+                    }
+                }
+                
+                // 应用马尔可夫链分析 - 分析号码出现的转移概率
+                applyMarkovChainAnalysis(candidateScores, recentData, weight * 0.3);
+            }
+        }
+        
+        // 马尔可夫链分析
+        function applyMarkovChainAnalysis(candidateScores, recentData, weight) {
+            const transitionMatrix = {};
+            
+            // 初始化转移矩阵
+            for (let i = 1; i <= 80; i++) {
+                transitionMatrix[i] = {};
+                for (let j = 1; j <= 80; j++) {
+                    transitionMatrix[i][j] = 0;
                 }
             }
             
-            // 如果还是没选够，直接从最高分选择
+            // 构建转移矩阵
+            for (let periodIndex = 1; periodIndex < recentData.length; periodIndex++) {
+                const currentPeriod = recentData[periodIndex - 1]; // 当前期
+                const nextPeriod = recentData[periodIndex];      // 下一期
+                
+                // 计算转移概率
+                currentPeriod.numbers.forEach(currentNumStr => {
+                    const currentNum = parseInt(currentNumStr);
+                    nextPeriod.numbers.forEach(nextNumStr => {
+                        const nextNum = parseInt(nextNumStr);
+                        transitionMatrix[currentNum][nextNum]++;
+                    });
+                });
+            }
+            
+            // 计算最后一期的转移概率影响
+            if (recentData.length > 0) {
+                const lastPeriod = recentData[0];
+                const totalTransitions = {};
+                
+                // 计算每个号码的总转移次数
+                for (let i = 1; i <= 80; i++) {
+                    totalTransitions[i] = Object.values(transitionMatrix[i]).reduce((sum, count) => sum + count, 0);
+                }
+                
+                // 应用转移概率
+                lastPeriod.numbers.forEach(numStr => {
+                    const num = parseInt(numStr);
+                    if (totalTransitions[num] > 0) {
+                        for (let targetNum = 1; targetNum <= 80; targetNum++) {
+                            const transitionProbability = transitionMatrix[num][targetNum] / totalTransitions[num];
+                            candidateScores[targetNum] += transitionProbability * 100 * weight;
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 模式识别分析
+        function calculatePatternRecognitionScore(candidateScores, weight) {
+            if (localState.kl8HistoryData && localState.kl8HistoryData.length >= 20) {
+                // 1. 周期性模式分析
+                analyzeCyclicalPatterns(candidateScores, weight * 0.3);
+                
+                // 2. 热冷号码模式分析
+                analyzeHotColdPatterns(candidateScores, weight * 0.4);
+                
+                // 3. 连号模式分析
+                analyzeConsecutivePatterns(candidateScores, weight * 0.3);
+            }
+        }
+        
+        // 周期性模式分析
+        function analyzeCyclicalPatterns(candidateScores, weight) {
+            const cycleLengths = [3, 5, 7, 10]; // 分析不同周期长度
+            
+            cycleLengths.forEach(cycleLength => {
+                for (let number = 1; number <= 80; number++) {
+                    const numberStr = number.toString().padStart(2, '0');
+                    let cycleMatches = 0;
+                    let totalCycles = 0;
+                    
+                    // 分析周期出现情况
+                    for (let i = 0; i < localState.kl8HistoryData.length - cycleLength; i += cycleLength) {
+                        totalCycles++;
+                        // 检查在周期位置上是否出现
+                        if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                            // 检查下一个周期位置
+                            if (i + cycleLength < localState.kl8HistoryData.length && 
+                                localState.kl8HistoryData[i + cycleLength].numbers.includes(numberStr)) {
+                                cycleMatches++;
+                            }
+                        }
+                    }
+                    
+                    // 应用周期匹配得分
+                    if (totalCycles > 0) {
+                        const cycleScore = (cycleMatches / totalCycles) * 50;
+                        candidateScores[number] += cycleScore * weight;
+                    }
+                }
+            });
+        }
+        
+        // 热冷号码模式分析
+        function analyzeHotColdPatterns(candidateScores, weight) {
+            const hotThreshold = 0.7; // 热门号码阈值
+            const coldThreshold = 0.3; // 冷门号码阈值
+            
+            // 分析最近10期的热冷状态
+            for (let number = 1; number <= 80; number++) {
+                const numberStr = number.toString().padStart(2, '0');
+                let recentAppearances = 0;
+                const recentPeriods = Math.min(10, localState.kl8HistoryData.length);
+                
+                // 统计最近出现次数
+                for (let i = 0; i < recentPeriods; i++) {
+                    if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                        recentAppearances++;
+                    }
+                }
+                
+                const appearanceRate = recentAppearances / recentPeriods;
+                let patternScore = 0;
+                
+                // 热门号码模式
+                if (appearanceRate > hotThreshold) {
+                    // 热门号码倾向于继续热门或即将变冷
+                    // 分析热门持续时间
+                    let hotStreak = 0;
+                    for (let i = 0; i < localState.kl8HistoryData.length; i++) {
+                        if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                            hotStreak++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // 热门持续3-5期后，继续热门的概率降低
+                    if (hotStreak >= 3 && hotStreak <= 5) {
+                        patternScore = 20;
+                    } else if (hotStreak > 5) {
+                        patternScore = 10; // 过热，概率降低
+                    } else {
+                        patternScore = 30; // 刚开始热，概率较高
+                    }
+                }
+                // 冷门号码模式
+                else if (appearanceRate < coldThreshold) {
+                    // 冷门号码即将反弹的概率分析
+                    let coldStreak = 0;
+                    for (let i = 0; i < localState.kl8HistoryData.length; i++) {
+                        if (!localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                            coldStreak++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // 冷号时间越长，反弹概率越高
+                    patternScore = Math.min(40, coldStreak * 2);
+                }
+                
+                candidateScores[number] += patternScore * weight;
+            }
+        }
+        
+        // 连号模式分析
+        function analyzeConsecutivePatterns(candidateScores, weight) {
+            // 统计连号出现的频率
+            const consecutiveCounts = {};
+            for (let i = 1; i <= 79; i++) {
+                consecutiveCounts[i] = 0;
+            }
+            
+            // 分析历史数据中的连号模式
+            localState.kl8HistoryData.forEach(period => {
+                const sortedNumbers = period.numbers.map(n => parseInt(n)).sort((a, b) => a - b);
+                
+                for (let i = 0; i < sortedNumbers.length - 1; i++) {
+                    if (sortedNumbers[i + 1] - sortedNumbers[i] === 1) {
+                        consecutiveCounts[sortedNumbers[i]]++;
+                    }
+                }
+            });
+            
+            // 应用连号模式得分
+            for (let baseNum = 1; baseNum <= 79; baseNum++) {
+                const consecutiveScore = consecutiveCounts[baseNum] * 2;
+                
+                // 为基础号码和连续号码增加分数
+                candidateScores[baseNum] += consecutiveScore * weight;
+                candidateScores[baseNum + 1] += consecutiveScore * weight;
+            }
+        }
+        
+        // 高级遗漏分析
+        function calculateAdvancedMissingScore(candidateScores, weight) {
+            for (let number = 1; number <= 80; number++) {
+                const numberStr = number.toString().padStart(2, '0');
+                
+                // 计算当前遗漏期数
+                let currentMissing = 0;
+                let lastAppearance = -1;
+                
+                for (let i = 0; i < localState.kl8HistoryData.length; i++) {
+                    if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                        lastAppearance = i;
+                        break;
+                    }
+                    currentMissing++;
+                }
+                
+                // 计算历史平均遗漏期数和标准差
+                let missingPeriods = [];
+                let tempMissing = 0;
+                
+                for (let i = 0; i < localState.kl8HistoryData.length; i++) {
+                    if (localState.kl8HistoryData[i].numbers.includes(numberStr)) {
+                        if (tempMissing > 0) {
+                            missingPeriods.push(tempMissing);
+                        }
+                        tempMissing = 0;
+                    } else {
+                        tempMissing++;
+                    }
+                }
+                
+                // 计算遗漏得分
+                let missingScore = 20; // 基础分
+                
+                if (missingPeriods.length > 0) {
+                    const avgMissing = missingPeriods.reduce((sum, val) => sum + val, 0) / missingPeriods.length;
+                    const stdMissing = Math.sqrt(
+                        missingPeriods.reduce((sum, val) => sum + Math.pow(val - avgMissing, 2), 0) / missingPeriods.length
+                    );
+                    
+                    // 当前遗漏与平均遗漏的关系
+                    const missingRatio = currentMissing / avgMissing;
+                    
+                    // 使用正态分布思想：当遗漏达到平均值+标准差时，概率显著增加
+                    if (missingRatio > 1.5) {
+                        missingScore = 60;
+                    } else if (missingRatio > 1.2) {
+                        missingScore = 40;
+                    } else if (missingRatio < 0.5) {
+                        missingScore = 10; // 遗漏较少，概率较低
+                    }
+                } else if (currentMissing > 20) {
+                    // 从未出现或长期未出现
+                    missingScore = 50;
+                }
+                
+                candidateScores[number] += missingScore * weight;
+            }
+        }
+        
+        // 统计相关性分析
+        function calculateStatisticalCorrelationScore(candidateScores, weight) {
+            if (localState.kl8HistoryData && localState.kl8HistoryData.length >= 15) {
+                // 分析号码之间的统计相关性
+                const correlationMatrix = calculateCorrelationMatrix();
+                
+                // 找出当前得分较高的号码
+                const topNumbers = Object.entries(candidateScores)
+                    .sort(([,a], [,b]) => b - a)
+                    .slice(0, 10)
+                    .map(([num]) => parseInt(num));
+                
+                // 为与高分号码高度相关的其他号码增加分数
+                for (const topNum of topNumbers) {
+                    for (let relatedNum = 1; relatedNum <= 80; relatedNum++) {
+                        if (topNum !== relatedNum && correlationMatrix[topNum] && correlationMatrix[topNum][relatedNum]) {
+                            const correlationScore = correlationMatrix[topNum][relatedNum] * 30;
+                            candidateScores[relatedNum] += correlationScore * weight;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 计算相关性矩阵
+        function calculateCorrelationMatrix() {
+            const correlationMatrix = {};
+            const totalPeriods = localState.kl8HistoryData.length;
+            
+            // 初始化矩阵
+            for (let i = 1; i <= 80; i++) {
+                correlationMatrix[i] = {};
+            }
+            
+            // 计算共现次数
+            for (let i = 1; i <= 80; i++) {
+                for (let j = i + 1; j <= 80; j++) {
+                    let coOccurrences = 0;
+                    const numIStr = i.toString().padStart(2, '0');
+                    const numJStr = j.toString().padStart(2, '0');
+                    
+                    for (const period of localState.kl8HistoryData) {
+                        if (period.numbers.includes(numIStr) && period.numbers.includes(numJStr)) {
+                            coOccurrences++;
+                        }
+                    }
+                    
+                    // 计算相关系数
+                    const iFrequency = localState.frequencyData.find(item => item.number === i)?.frequency || 0;
+                    const jFrequency = localState.frequencyData.find(item => item.number === j)?.frequency || 0;
+                    
+                    // 使用修正的相关系数计算
+                    const expectedCoOccurrences = (iFrequency * jFrequency) / totalPeriods;
+                    let correlation = 0;
+                    
+                    if (expectedCoOccurrences > 0) {
+                        correlation = Math.min(1, coOccurrences / expectedCoOccurrences);
+                    }
+                    
+                    correlationMatrix[i][j] = correlation;
+                    correlationMatrix[j][i] = correlation; // 对称矩阵
+                }
+            }
+            
+            return correlationMatrix;
+        }
+        
+        // 自适应调整
+        function applyAdaptiveAdjustment(candidateScores, weight) {
+            // 基于历史预测准确率进行自适应调整
+            if (localState.predictionHistory && localState.predictionHistory.length > 0) {
+                const recentPredictions = localState.predictionHistory.slice(0, 10);
+                const numberSuccessRate = {};
+                
+                // 初始化成功率
+                for (let i = 1; i <= 80; i++) {
+                    numberSuccessRate[i] = { hits: 0, total: 0 };
+                }
+                
+                // 统计每个号码的预测成功率
+                recentPredictions.forEach(prediction => {
+                    if (prediction.accuracy !== '--') {
+                        const predictedNumbers = prediction.numbers;
+                        
+                        // 找到对应的开奖结果
+                        const correspondingResult = localState.kl8HistoryData.find(
+                            result => result.period === prediction.period
+                        );
+                        
+                        if (correspondingResult) {
+                            const resultNumbers = correspondingResult.numbers.map(n => parseInt(n));
+                            
+                            predictedNumbers.forEach(num => {
+                                numberSuccessRate[num].total++;
+                                if (resultNumbers.includes(num)) {
+                                    numberSuccessRate[num].hits++;
+                                }
+                            });
+                        }
+                    }
+                });
+                
+                // 应用自适应调整
+                for (let number = 1; number <= 80; number++) {
+                    const stats = numberSuccessRate[number];
+                    if (stats.total > 0) {
+                        const successRate = stats.hits / stats.total;
+                        // 成功预测的号码给予额外奖励，预测错误的给予惩罚
+                        const adjustment = (successRate - 0.25) * 40; // 0.25是随机概率基准
+                        candidateScores[number] += adjustment * weight;
+                    }
+                }
+            }
+        }
+        
+        // 智能选择策略 - 优化的分区平衡算法
+        function selectNumbersWithIntelligentBalance(sortedCandidates) {
+            const predicted = [];
+            const numbersToPick = 20;
+            const zoneCounts = [0, 0, 0, 0]; // 四个分区的计数器
+            
+            // 1. 首先获取最优分区分布
+            const optimalDistribution = calculateOptimalZoneDistribution();
+            
+            // 2. 按分数排序选择，但确保分区平衡
+            let round = 0;
+            const maxRounds = 5;
+            
+            while (predicted.length < numbersToPick && round < maxRounds) {
+                for (let i = 0; i < sortedCandidates.length && predicted.length < numbersToPick; i++) {
+                    const num = sortedCandidates[i].number;
+                    const zoneIndex = getZoneIndex(num);
+                    
+                    // 确定当前分区允许的最大选择数量
+                    const maxForZone = optimalDistribution[zoneIndex] + 2; // 允许一定的灵活性
+                    const minForZone = Math.max(0, optimalDistribution[zoneIndex] - 2); // 最低保证数量
+                    
+                    // 策略：
+                    // 1. 如果分区数量少于最小值，优先选择
+                    // 2. 如果分区数量未超过最大值，并且分数足够高，选择
+                    // 3. 最后一轮，放开限制，确保选够20个
+                    const highScoreThreshold = sortedCandidates[Math.floor(sortedCandidates.length * 0.3)].score;
+                    const isHighScore = sortedCandidates[i].score >= highScoreThreshold * 0.8;
+                    
+                    if (!predicted.includes(num)) {
+                        if (zoneCounts[zoneIndex] < minForZone ||
+                            (zoneCounts[zoneIndex] < maxForZone && isHighScore) ||
+                            round === maxRounds - 1) {
+                            
+                            predicted.push(num);
+                            zoneCounts[zoneIndex]++;
+                        }
+                    }
+                }
+                round++;
+            }
+            
+            // 3. 如果还是没选够，补充最高分的号码
             if (predicted.length < numbersToPick) {
                 for (let i = 0; i < sortedCandidates.length && predicted.length < numbersToPick; i++) {
                     const num = sortedCandidates[i].number;
@@ -1310,12 +1806,95 @@
                 }
             }
             
-            console.log('基于历史相同号码和频率分布的预测完成，选中号码:', predicted);
             return predicted;
         }
-
+        
+        // 获取号码所在分区索引
+        function getZoneIndex(number) {
+            if (number <= 20) return 0;
+            else if (number <= 40) return 1;
+            else if (number <= 60) return 2;
+            else return 3;
+        }
+        
+        // 计算最优分区分布
+        function calculateOptimalZoneDistribution() {
+            // 默认的基础分布（每个分区5个号码）
+            const baseDistribution = [5, 5, 5, 5];
+            
+            if (!localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
+                return baseDistribution;
+            }
+            
+            // 分析最近10期的分区分布情况
+            const recentPeriods = Math.min(10, localState.kl8HistoryData.length);
+            const zoneDistributionHistory = [];
+            
+            // 收集历史分区分布数据
+            for (let i = 0; i < recentPeriods; i++) {
+                const zoneCounts = [0, 0, 0, 0];
+                localState.kl8HistoryData[i].numbers.forEach(numStr => {
+                    const num = parseInt(numStr);
+                    const zoneIndex = getZoneIndex(num);
+                    zoneCounts[zoneIndex]++;
+                });
+                zoneDistributionHistory.push(zoneCounts);
+            }
+            
+            // 计算每个分区的平均出现次数
+            const avgZoneCounts = [0, 0, 0, 0];
+            zoneDistributionHistory.forEach(counts => {
+                for (let i = 0; i < 4; i++) {
+                    avgZoneCounts[i] += counts[i];
+                }
+            });
+            
+            // 归一化平均分布
+            const totalNumbersPerPeriod = 20;
+            let optimalDistribution = [];
+            let remaining = totalNumbersPerPeriod;
+            
+            // 首先分配整数部分
+            for (let i = 0; i < 4; i++) {
+                avgZoneCounts[i] = avgZoneCounts[i] / recentPeriods;
+                const rounded = Math.floor(avgZoneCounts[i]);
+                optimalDistribution.push(rounded);
+                remaining -= rounded;
+            }
+            
+            // 分配剩余的号码，优先考虑最接近下一个整数的分区
+            const fractionalParts = avgZoneCounts.map((avg, i) => ({
+                index: i,
+                fractional: avg - optimalDistribution[i]
+            })).sort((a, b) => b.fractional - a.fractional);
+            
+            for (let i = 0; i < remaining; i++) {
+                optimalDistribution[fractionalParts[i].index]++;
+            }
+            
+            // 添加一些随机性和灵活性，避免过度拟合
+            for (let i = 0; i < 4; i++) {
+                // 根据历史数据的波动程度调整灵活性
+                const zoneVariance = calculateZoneVariance(zoneDistributionHistory, i);
+                const flexibility = Math.min(2, Math.max(0, Math.round(zoneVariance * 0.5)));
+                
+                // 确保分布不会偏离基础太多
+                optimalDistribution[i] = Math.min(8, Math.max(3, optimalDistribution[i]));
+            }
+            
+            return optimalDistribution;
+        }
+        
+        // 计算分区分布的方差
+        function calculateZoneVariance(zoneDistributionHistory, zoneIndex) {
+            const values = zoneDistributionHistory.map(counts => counts[zoneIndex]);
+            const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+            const squaredDiffs = values.map(val => Math.pow(val - mean, 2));
+            return squaredDiffs.reduce((sum, val) => sum + val, 0) / values.length;
+        }
+        // 智能预测算法 - 优化版（v3.0）
         // 智能预测算法 - 增强版
-            function smartPrediction() {
+        function smartPrediction() {
                 // 创建候选分数字典
                 const candidateScores = {};
                 
@@ -1426,36 +2005,236 @@
         }
 
         // 平衡分区预测 - 增强版
+        // 平衡分区预测算法 v3.0 (优化版)
         function balancedPrediction() {
+            // 1. 计算历史分区分布统计，确定最优分区比例
+            const optimalZoneDistribution = calculateOptimalZoneDistribution();
+            
+            // 2. 为每个分区创建评分表
+            const zoneScores = createZoneScoreTables();
+            
+            // 3. 从每个分区选择评分最高的号码
             const predicted = [];
             
-            // 每个分区选择5个号码
-            const zoneSizes = [5, 5, 5, 5];
-            
-            // 从每个分区选择高频号码
-            for (let i = 0; i < localState.frequencyData.length; i++) {
-                const num = localState.frequencyData[i].number;
+            // 按照最优分区分布选择号码
+            for (let zoneIndex = 0; zoneIndex < 4; zoneIndex++) {
+                const numbersToSelect = optimalZoneDistribution[zoneIndex];
+                const sortedNumbers = zoneScores[zoneIndex].sort((a, b) => b.totalScore - a.totalScore);
                 
-                // 确定号码所在分区
-                let zoneIndex = 0;
-                if (num <= 20) zoneIndex = 0;
-                else if (num <= 40) zoneIndex = 1;
-                else if (num <= 60) zoneIndex = 2;
-                else zoneIndex = 3;
-                
-                // 如果分区还需要号码且号码未被选择，则添加
-                if (zoneSizes[zoneIndex] > 0 && !predicted.includes(num)) {
-                    predicted.push(num);
-                    zoneSizes[zoneIndex]--;
-                }
-                
-                // 如果所有分区都选够了，退出循环
-                if (zoneSizes.every(size => size === 0)) {
-                    break;
+                // 选择前N个最高分的号码
+                for (let i = 0; i < numbersToSelect && i < sortedNumbers.length; i++) {
+                    predicted.push(sortedNumbers[i].number);
                 }
             }
             
             return predicted;
+        }
+        
+        // 计算历史最优分区分布
+        function calculateOptimalZoneDistribution() {
+            // 默认均匀分布
+            let optimalDistribution = [5, 5, 5, 5];
+            
+            // 如果有历史数据，分析最佳分区分布
+            if (localState.kl8HistoryData && localState.kl8HistoryData.length > 0) {
+                const zoneDistributionCounts = [
+                    Array(11).fill(0), // 分区1: 0-10个号码
+                    Array(11).fill(0), // 分区2: 0-10个号码
+                    Array(11).fill(0), // 分区3: 0-10个号码
+                    Array(11).fill(0)  // 分区4: 0-10个号码
+                ];
+                
+                // 统计历史开奖号码的分区分布
+                for (const periodData of localState.kl8HistoryData) {
+                    const zone1 = periodData.numbers.filter(num => parseInt(num) <= 20).length;
+                    const zone2 = periodData.numbers.filter(num => parseInt(num) > 20 && parseInt(num) <= 40).length;
+                    const zone3 = periodData.numbers.filter(num => parseInt(num) > 40 && parseInt(num) <= 60).length;
+                    const zone4 = periodData.numbers.filter(num => parseInt(num) > 60).length;
+                    
+                    zoneDistributionCounts[0][Math.min(zone1, 10)]++;
+                    zoneDistributionCounts[1][Math.min(zone2, 10)]++;
+                    zoneDistributionCounts[2][Math.min(zone3, 10)]++;
+                    zoneDistributionCounts[3][Math.min(zone4, 10)]++;
+                }
+                
+                // 找到每个分区出现频率最高的数量
+                for (let zoneIndex = 0; zoneIndex < 4; zoneIndex++) {
+                    const maxCount = Math.max(...zoneDistributionCounts[zoneIndex]);
+                    const optimalCount = zoneDistributionCounts[zoneIndex].indexOf(maxCount);
+                    // 限制在合理范围内，并且总和为20
+                    optimalDistribution[zoneIndex] = Math.max(3, Math.min(8, optimalCount));
+                }
+                
+                // 确保总和为20，进行微调
+                let total = optimalDistribution.reduce((sum, count) => sum + count, 0);
+                while (total !== 20) {
+                    if (total < 20) {
+                        // 找出历史出现频率第二高的分区增加
+                        const variances = optimalDistribution.map((count, zoneIndex) => {
+                            const secondMaxCount = [...zoneDistributionCounts[zoneIndex]].sort((a, b) => b - a)[1] || 0;
+                            return secondMaxCount;
+                        });
+                        const zoneToIncrease = variances.indexOf(Math.max(...variances));
+                        optimalDistribution[zoneToIncrease]++;
+                    } else {
+                        // 找出历史出现频率较低的分区减少
+                        const zoneToDecrease = optimalDistribution.indexOf(Math.min(...optimalDistribution));
+                        optimalDistribution[zoneToDecrease]--;
+                    }
+                    total = optimalDistribution.reduce((sum, count) => sum + count, 0);
+                }
+            }
+            
+            return optimalDistribution;
+        }
+        
+        // 为每个分区创建号码评分表
+        function createZoneScoreTables() {
+            // 初始化4个分区的评分表
+            const zoneScores = [
+                [], [], [], [] // 分别对应4个分区
+            ];
+            
+            // 计算每个号码的综合评分
+            for (let number = 1; number <= 80; number++) {
+                // 确定分区
+                let zoneIndex = 0;
+                if (number <= 20) zoneIndex = 0;
+                else if (number <= 40) zoneIndex = 1;
+                else if (number <= 60) zoneIndex = 2;
+                else zoneIndex = 3;
+                
+                // 获取频率数据
+                const frequencyData = localState.frequencyData.find(item => item.number === number);
+                const frequency = frequencyData ? frequencyData.frequency : 0;
+                const maxFrequency = localState.frequencyData.length > 0 ? localState.frequencyData[0].frequency : 1;
+                const normalizedFrequency = maxFrequency > 0 ? frequency / maxFrequency : 0;
+                
+                // 计算分区内频率排名
+                const zoneNumbers = [];
+                for (let num = zoneIndex * 20 + 1; num <= (zoneIndex + 1) * 20; num++) {
+                    const fData = localState.frequencyData.find(item => item.number === num);
+                    zoneNumbers.push({ number: num, frequency: fData ? fData.frequency : 0 });
+                }
+                zoneNumbers.sort((a, b) => b.frequency - a.frequency);
+                const zoneFrequencyRank = zoneNumbers.findIndex(item => item.number === number) + 1;
+                const normalizedZoneRank = 1 - (zoneFrequencyRank - 1) / 20;
+                
+                // 计算趋势得分（基于最近10期的表现）
+                const recentTrendScore = calculateRecentTrendScore(number);
+                
+                // 计算遗漏分析得分
+                const missingScore = calculateMissingScore(number);
+                
+                // 计算分区平衡得分（考虑该分区内号码的分布）
+                const zoneBalanceScore = calculateZoneBalanceScore(number, zoneIndex, zoneNumbers);
+                
+                // 综合评分（加权平均）
+                const totalScore = (
+                    normalizedZoneRank * 0.35 +  // 分区内频率排名权重
+                    recentTrendScore * 0.25 +     // 近期趋势权重
+                    missingScore * 0.20 +         // 遗漏分析权重
+                    zoneBalanceScore * 0.10 +     // 分区平衡权重
+                    normalizedFrequency * 0.10    // 整体频率权重
+                );
+                
+                zoneScores[zoneIndex].push({
+                    number: number,
+                    frequency: frequency,
+                    totalScore: totalScore,
+                    zoneRank: zoneFrequencyRank
+                });
+            }
+            
+            return zoneScores;
+        }
+        
+        // 计算近期趋势得分
+        function calculateRecentTrendScore(number) {
+            if (!localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
+                return 0.5; // 默认中等概率
+            }
+            
+            // 分析最近10期
+            const recentPeriods = Math.min(10, localState.kl8HistoryData.length);
+            let appearanceCount = 0;
+            let consecutiveMisses = 0;
+            
+            for (let i = 0; i < recentPeriods; i++) {
+                const periodData = localState.kl8HistoryData[i];
+                const appeared = periodData.numbers.includes(number.toString().padStart(2, '0'));
+                
+                if (appeared) {
+                    appearanceCount++;
+                    consecutiveMisses = 0;
+                } else {
+                    consecutiveMisses++;
+                }
+            }
+            
+            // 计算出现频率
+            const appearanceRate = appearanceCount / recentPeriods;
+            
+            // 考虑连空情况的调整
+            let adjustment = 0;
+            if (consecutiveMisses > 0) {
+                // 连空越多，调整值越高（表示越可能出现）
+                adjustment = Math.min(0.3, consecutiveMisses * 0.05);
+            }
+            
+            return Math.min(1, appearanceRate + adjustment);
+        }
+        
+        // 计算遗漏分析得分
+        function calculateMissingScore(number) {
+            if (!localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
+                return 0.5;
+            }
+            
+            // 计算遗漏期数
+            let missingCount = 0;
+            for (const periodData of localState.kl8HistoryData) {
+                if (!periodData.numbers.includes(number.toString().padStart(2, '0'))) {
+                    missingCount++;
+                } else {
+                    break;
+                }
+            }
+            
+            // 基于遗漏期数计算得分，使用sigmoid函数让得分更平滑
+            // 适当的阈值：如果遗漏超过20期，认为概率明显增加
+            const normalizedMissing = Math.min(missingCount / 20, 1);
+            const score = 0.5 + (1 / (1 + Math.exp(-6 * (normalizedMissing - 0.5))) - 0.5) * 2;
+            
+            return score;
+        }
+        
+        // 计算分区平衡得分
+        function calculateZoneBalanceScore(number, zoneIndex, zoneNumbers) {
+            // 计算该号码在分区中的奇偶分布平衡贡献
+            const isEven = number % 2 === 0;
+            const oddNumbers = zoneNumbers.filter(n => n.number % 2 !== 0).length;
+            const evenNumbers = zoneNumbers.filter(n => n.number % 2 === 0).length;
+            
+            // 如果奇偶分布不均衡，倾向于补充较少的那一类
+            let parityBalanceScore = 0.5;
+            if (oddNumbers > evenNumbers && !isEven) {
+                parityBalanceScore = 0.3; // 奇数太多，降低奇数权重
+            } else if (evenNumbers > oddNumbers && isEven) {
+                parityBalanceScore = 0.3; // 偶数太多，降低偶数权重
+            } else if (oddNumbers < evenNumbers && !isEven) {
+                parityBalanceScore = 0.7; // 奇数太少，提高奇数权重
+            } else if (evenNumbers < oddNumbers && isEven) {
+                parityBalanceScore = 0.7; // 偶数太少，提高偶数权重
+            }
+            
+            // 计算号码大小分布平衡贡献
+            const zoneMid = zoneIndex * 20 + 10;
+            const distanceFromMid = Math.abs(number - zoneMid);
+            const normalizedDistance = distanceFromMid / 10; // 标准化到0-1范围
+            const sizeBalanceScore = 1 - normalizedDistance * 0.3; // 距离中心越近得分越高，但给予一定差异
+            
+            return (parityBalanceScore * 0.6 + sizeBalanceScore * 0.4);
         }
         
         // 新增：AI预测更新函数
@@ -1598,7 +2377,7 @@
         function savePredictionHistory() {
             try {
                 // 只保留最近100条记录
-            const historyToSave = localState.predictionHistory.slice(0, 100);
+                const historyToSave = localState.predictionHistory.slice(0, 100);
                 localStorage.setItem('kl8PredictionHistory', JSON.stringify(historyToSave));
             } catch (error) {
                 console.error('保存预测历史失败:', error);
@@ -1819,7 +2598,7 @@
             
             detailCard.appendChild(statsContainer);
             
-            // 添加准确率信息// 添加准确率信息
+            // 添加准确率信息
             const accuracyInfo = document.createElement('div');
             accuracyInfo.className = 'bg-gray-50 p-3 rounded';
             
@@ -2014,21 +2793,20 @@
                 try {
                     // 直接使用备份数据
                     const simpleCreateData = [
+                        { period: "2025285", numbers: ["05", "06", "07", "09", "11", "19", "24", "27", "28", "29", "38", "39", "41", "45", "46", "63", "67", "68", "73", "80"] },
+                        { period: "2025284", numbers: ["10", "11", "14", "19", "20", "26", "29", "30", "35", "37", "40", "41", "45", "46", "59", "68", "70", "77", "78", "80"] },
+                        { period: "2025283", numbers: ["02", "04", "13", "19", "20", "23", "29", "31", "37", "40", "47", "52", "53", "54", "55", "63", "64", "65", "68", "69"] },
+                        { period: "2025282", numbers: ["05", "09", "12", "15", "16", "20", "22", "24", "26", "30", "35", "38", "39", "47", "49", "56", "62", "66", "72", "74"] },
+                        { period: "2025281", numbers: ["08", "15", "23", "24", "28", "34", "35", "36", "38", "43", "45", "49", "51", "53", "64", "67", "69", "71", "74", "75"] },
+                        { period: "2025280", numbers: ["06", "10", "14", "15", "16", "25", "32", "36", "46", "49", "50", "59", "64", "68", "70", "72", "73", "77", "78", "79"] },
                         { period: "2025279", numbers: ["01", "05", "06", "14", "25", "32", "35", "40", "45", "47", "53", "62", "63", "67", "68", "70", "71", "72", "75", "78"] },
                         { period: "2025278", numbers: ["04", "05", "07", "08", "10", "15", "17", "18", "22", "26", "30", "33", "39", "42", "48", "50", "63", "68", "72", "77"] },
-
                         { period: "2025277", numbers: ["09", "11", "13", "14", "20", "22", "39", "43", "48", "52", "54", "55", "57", "64", "68", "69", "72", "73", "75", "80"] },
-
                         { period: "2025276", numbers: ["03", "17", "21", "22", "24", "30", "33", "34", "41", "44", "45", "47", "48", "59", "61", "68", "69", "76", "78", "79"] },
-
                         { period: "2025275", numbers: ["07", "09", "13", "14", "28", "32", "33", "34", "35", "37", "48", "50", "51", "56", "57", "59", "65", "69", "72", "76"] },
-
                         { period: "2025274", numbers: ["02", "03", "10", "18", "26", "31", "33", "34", "46", "49", "50", "51", "54", "55", "60", "62", "74", "75", "76", "80"] },
-
                         { period: "2025273", numbers: ["08", "09", "11", "13", "14", "18", "20", "24", "28", "30", "31", "32", "38", "39", "40", "46", "62", "64", "69", "70"] },
-
                         { period: "2025272", numbers: ["03", "06", "09", "10", "11", "13", "14", "16", "20", "22", "25", "43", "47", "50", "60", "61", "62", "68", "73", "79"] },
-
                         { period: "2025271", numbers: ["01", "03", "07", "15", "17", "20", "27", "37", "41", "42", "47", "48", "53", "54", "60", "62", "63", "68", "77", "78"] },
                         { period: "2025270", numbers: ["02", "08", "10", "20", "21", "27", "28", "30", "33", "36", "43", "48", "49", "52", "60", "61", "64", "71", "75", "79"] },  
                         { period: "2025269", numbers: ["01", "08", "10", "15", "19", "20", "24", "30", "33", "43", "49", "50", "56", "57", "60", "67", "70", "73", "78", "80"] },
@@ -2316,25 +3094,7 @@
         // 初始化单个位置的走势图
         function initPositionChart(position) {
             const ctx = document.getElementById('positionChart' + position).getContext('2d');
-            
-            // 准备默认的空数据
-            let labels = [];
-            let positionNumbers = [];
-            
-            // 如果有历史数据，则使用它
-            if (localState.kl8HistoryData && localState.kl8HistoryData.length > 0) {
-                // 默认使用最近20期数据来显示走势图
-                const displayData = localState.kl8HistoryData.slice(0, 20).reverse();
-                labels = displayData.map(item => item.period);
-                
-                // 获取每期指定位置的号码
-                positionNumbers = displayData.map(item => {
-                    if (item.numbers && item.numbers.length >= position) {
-                        return parseInt(item.numbers[position - 1]);
-                    }
-                    return null;
-                });
-            }
+            const canvas = ctx.canvas;
             
             // 为不同位置选择不同的颜色
             const colors = [
@@ -2343,114 +3103,321 @@
                 '#722ED1', '#165DFF', '#36CFC9', '#FFC53D', '#F53F3F',
                 '#722ED1', '#165DFF', '#36CFC9', '#FFC53D', '#F53F3F'
             ];
-            const borderColor = colors[position - 1];
+            const numberColor = colors[position - 1];
             
-            // 初始化位置图表对象
+            // 准备数据和期号
+            let positionNumbers = [];
+            let drawDates = [];
+            
+            // 获取历史数据
+            if (localState.kl8HistoryData && localState.kl8HistoryData.length > 0) {
+                const displayData = localState.kl8HistoryData.slice(0, 20).reverse();
+                positionNumbers = displayData.map(item => {
+                    if (item.numbers && item.numbers.length >= position) {
+                        return parseInt(item.numbers[position - 1]);
+                    }
+                    return null;
+                }).filter(n => n !== null);
+                
+                // 获取期号数据
+                drawDates = displayData.slice(0, positionNumbers.length).map(item => {
+                    if (item.issue) {
+                        // 只显示期号的后几位
+                        return item.issue.slice(-3);
+                    }
+                    return '';
+                });
+            }
+            
+            // 销毁已存在的图表
+            if (localState.positionCharts && localState.positionCharts[position]) {
+                localState.positionCharts[position].destroy();
+            }
+            
+            // 确保positionCharts对象存在
             if (!localState.positionCharts) {
                 localState.positionCharts = {};
             }
             
-            // 先销毁已存在的图表实例（如果有）
-            if (localState.positionCharts[position]) {
-                localState.positionCharts[position].destroy();
-            }
-            
-            // 另外，直接检查canvas元素上是否有Chart实例并销毁它
-            if (ctx && ctx.chart) {
-                ctx.chart.destroy();
-            }
-            
-            // 创建新的图表实例
-            localState.positionCharts[position] = new Chart(ctx, {
+            // 创建图表实例
+            const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: labels,
+                    labels: drawDates,
                     datasets: [{
-                        label: '位置' + position + '号码',
                         data: positionNumbers,
-                        borderColor: borderColor,
-                        backgroundColor: borderColor + '1A', // 10% opacity
-                        tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
+                        borderColor: numberColor,
+                        backgroundColor: numberColor + '20',
+                        pointRadius: 5,
+                        pointBackgroundColor: numberColor,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        borderWidth: 2,
                         fill: false
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: {
-                        intersect: false,
-                        mode: 'index',
+                    animation: {
+                        duration: 0
+                    },
+                    layout: {
+                        padding: {
+                            top: 20,
+                            bottom: 40,
+                            left: 20,
+                            right: 20
+                        }
                     },
                     plugins: {
                         legend: {
-                            position: 'top',
-                        },
-                        title: {
                             display: false
                         },
                         tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return '位置' + position + ': ' + context.raw;
-                                }
+                        enabled: false
+                    }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                color: '#666',
+                                font: {
+                                    size: 10
+                                },
+                                maxRotation: 45,
+                                minRotation: 45
                             }
                         },
-                        // 自定义插件实现数字显示
-                        customLabels: {
-                            afterDatasetsDraw: function(chart) {
-                                const ctx = chart.ctx;
-                                chart.data.datasets.forEach(function(dataset, datasetIndex) {
-                                    const meta = chart.getDatasetMeta(datasetIndex);
-                                    if (!meta.hidden) {
-                                        meta.data.forEach(function(element, index) {
-                                            // 获取数据点的值
-                                            const value = dataset.data[index];
-                                            if (value !== null && value !== undefined) {
-                                                // 获取数据点的位置
-                                                const x = element.x;
-                                                const y = element.y;
-                                                
-                                                // 设置样式
-                                                ctx.save();
-                                                ctx.font = 'bold 10px Arial';
-                                                ctx.fillStyle = '#000';
-                                                ctx.textAlign = 'center';
-                                                ctx.textBaseline = 'bottom';
-                                                
-                                                // 在数据点上方绘制数字
-                                                ctx.fillText(value, x, y - 10);
-                                                
-                                                ctx.restore();
-                                            }
-                                        });
-                                    }
-                                });
-                            }
+                        y: {
+                            display: true,
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                color: '#666',
+                                font: {
+                                    size: 10
+                                },
+                                stepSize: 10
+                            },
+                            min: 0,
+                            max: 80
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                },
+                plugins: [{
+                    id: 'numberLabels',
+                    afterDraw: function(chart) {
+                        const ctx = chart.ctx;
+                        ctx.font = 'bold 14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        ctx.fillStyle = numberColor;
+                        
+                        // 绘制号码标签，调整位置避免重叠
+                        chart.data.datasets.forEach((dataset, datasetIndex) => {
+                            const meta = chart.getDatasetMeta(datasetIndex);
+                            meta.data.forEach((point, index) => {
+                                const value = dataset.data[index];
+                                if (value !== null && value !== undefined) {
+                                    // 为避免重叠，在数据点上方添加足够空间
+                                    ctx.fillText(value.toString(), point.x, point.y - 10);
+                                }
+                            });
+                        });
+                    }
+                }]
+            });
+            
+            // 存储图表实例
+            localState.positionCharts[position] = chart;
+        }
+        
+        // 强制刷新所有位置图表的函数
+        function forceRefreshAllPositionCharts() {
+            console.log('强制刷新所有位置图表');
+            // 销毁所有现有图表实例
+            if (localState.positionCharts) {
+                Object.keys(localState.positionCharts).forEach(position => {
+                    if (localState.positionCharts[position]) {
+                        localState.positionCharts[position].destroy();
+                    }
+                });
+                // 清空positionCharts对象
+                localState.positionCharts = {};
+            }
+            
+            // 销毁所有末位号码图表实例
+            if (localState.lastDigitCharts) {
+                Object.keys(localState.lastDigitCharts).forEach(digit => {
+                    if (localState.lastDigitCharts[digit]) {
+                        localState.lastDigitCharts[digit].destroy();
+                    }
+                });
+                // 清空lastDigitCharts对象
+                localState.lastDigitCharts = {};
+            }
+            
+            // 重新初始化所有图表
+            initPositionCharts();
+        }
+        
+        // 暴露给全局作用域，以便在控制台或其他地方调用
+        window.forceRefreshCharts = forceRefreshAllPositionCharts;
+        
+        // 初始化末位号码走势图
+        function initLastDigitChart(digit) {
+            const ctx = document.getElementById('lastDigitChart' + digit);
+            if (!ctx || !localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
+                return null;
+            }
+            
+            // 使用指定数量的最近几期数据来显示走势图
+            const numPeriods = parseInt(document.getElementById('positionChartPeriods')?.value || 20);
+            const displayData = localState.kl8HistoryData.slice(0, numPeriods).reverse();
+            
+            // 准备期号数据（只显示后三位）
+            const drawDates = displayData.map(item => item.period.slice(-3));
+            
+            // 为每个末位数字获取每期出现的位置
+            const positionNumbers = displayData.map(item => {
+                if (!item.numbers || item.numbers.length === 0) {
+                    return null;
+                }
+                
+                // 找到末位等于digit的第一个号码的位置
+                for (let i = 0; i < item.numbers.length; i++) {
+                    const number = parseInt(item.numbers[i]);
+                    if (number % 10 === digit) {
+                        return i + 1; // 返回位置（从1开始）
+                    }
+                }
+                return null; // 如果没有找到，返回null
+            });
+            
+            // 数字颜色根据末位不同变化
+            const digitColors = [
+                '#FF6384', // 0 - 红色
+                '#36A2EB', // 1 - 蓝色
+                '#FFCE56', // 2 - 黄色
+                '#4BC0C0', // 3 - 青色
+                '#9966FF', // 4 - 紫色
+                '#FF9F40', // 5 - 橙色
+                '#C9CBCF', // 6 - 灰色
+                '#4BC0C0', // 7 - 青色
+                '#FF6384', // 8 - 红色
+                '#36A2EB'  // 9 - 蓝色
+            ];
+            
+            const numberColor = digitColors[digit] || '#165DFF';
+            
+            // 创建图表实例
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: drawDates,
+                    datasets: [{
+                        label: `末位${digit}`,
+                        data: positionNumbers,
+                        backgroundColor: numberColor + '20',
+                        borderColor: numberColor,
+                        borderWidth: 2,
+                        tension: 0.1,
+                        pointBackgroundColor: numberColor,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: false
+                        },
+                        numberLabels: {
+                            // 数字标签将通过插件添加
                         }
                     },
                     scales: {
                         x: {
-                            title: {
+                            display: true,
+                            grid: {
                                 display: true,
-                                text: '期号'
+                                color: '#f0f0f0'
                             }
                         },
                         y: {
-                            title: {
-                                display: true,
-                                text: '号码'
-                            },
-                            min: 0,
-                            max: 80,
+                            display: true,
+                            beginAtZero: true,
+                            max: 20,
                             ticks: {
-                                stepSize: 10
+                                stepSize: 5
+                            },
+                            grid: {
+                                display: true,
+                                color: '#f0f0f0'
                             }
                         }
+                    },
+                    layout: {
+                        padding: {
+                            top: 20,
+                            bottom: 20
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
                     }
-                }
+                },
+                plugins: [{
+                    id: 'numberLabels',
+                    afterDraw: function(chart) {
+                        const ctx = chart.ctx;
+                        ctx.font = 'bold 14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        ctx.fillStyle = numberColor;
+                        
+                        // 绘制号码标签，调整位置避免重叠
+                        chart.data.datasets.forEach((dataset, datasetIndex) => {
+                            const meta = chart.getDatasetMeta(datasetIndex);
+                            meta.data.forEach((point, index) => {
+                                const value = dataset.data[index];
+                                if (value !== null && value !== undefined) {
+                                    // 为避免重叠，在数据点上方添加足够空间
+                                    ctx.fillText(value.toString(), point.x, point.y - 10);
+                                }
+                            });
+                        });
+                    }
+                }]
             });
+            
+            // 存储图表实例
+            if (!localState.lastDigitCharts) {
+                localState.lastDigitCharts = {};
+            }
+            localState.lastDigitCharts[digit] = chart;
+            
+            return chart;
         }
         
         // 初始化所有位置的走势图
@@ -2458,6 +3425,11 @@
             // 确保positionCharts对象存在
             if (!localState.positionCharts) {
                 localState.positionCharts = {};
+            }
+            
+            // 确保lastDigitCharts对象存在
+            if (!localState.lastDigitCharts) {
+                localState.lastDigitCharts = {};
             }
             
             // 初始化所有20个位置的走势图
@@ -2468,35 +3440,79 @@
                 }
             }
             
+            // 初始化所有末位号码走势图（0-9）
+            for (let i = 0; i <= 9; i++) {
+                const ctx = document.getElementById('lastDigitChart' + i);
+                if (ctx) {
+                    initLastDigitChart(i);
+                }
+            }
+            
             // 添加分页切换功能
-            const tabButtons = document.querySelectorAll('.position-chart-tab');
-            tabButtons.forEach(button => {
+            const pageButtons = document.querySelectorAll('.position-page-btn');
+            pageButtons.forEach(button => {
                 button.addEventListener('click', function() {
-                    // 移除所有标签的激活状态
-                    tabButtons.forEach(btn => btn.classList.remove('active', 'bg-blue-500', 'text-white'));
-                    tabButtons.forEach(btn => btn.classList.add('bg-gray-200', 'text-gray-700'));
+                    // 获取要显示的页码
+                    const page = parseInt(this.getAttribute('data-page'));
                     
-                    // 设置当前标签为激活状态
-                    this.classList.remove('bg-gray-200', 'text-gray-700');
-                    this.classList.add('active', 'bg-blue-500', 'text-white');
+                    // 更新按钮状态
+                    pageButtons.forEach(btn => {
+                        const btnPage = parseInt(btn.getAttribute('data-page'));
+                        if (btnPage === page) {
+                            btn.classList.add('bg-primary', 'text-white', 'border-primary');
+                            btn.classList.remove('border-gray-300', 'text-gray-700', 'hover:bg-gray-50');
+                        } else {
+                            btn.classList.remove('bg-primary', 'text-white', 'border-primary');
+                            btn.classList.add('border-gray-300', 'text-gray-700', 'hover:bg-gray-50');
+                        }
+                    });
                     
-                    // 隐藏所有图表容器
-                    const chartContainers = document.querySelectorAll('.position-chart-container');
-                    chartContainers.forEach(container => container.classList.add('hidden'));
+                    // 隐藏所有页面
+                    for (let i = 1; i <= 5; i++) {
+                        const pageElement = document.getElementById('positionChartsPage' + i);
+                        if (pageElement) {
+                            pageElement.classList.add('hidden');
+                        }
+                    }
                     
-                    // 显示当前标签对应的图表容器
-                    const tabId = this.id;
-                    const containerId = tabId.replace('tab', 'container');
-                    const container = document.getElementById(containerId);
-                    if (container) {
-                        container.classList.remove('hidden');
+                    // 显示选中的页面
+                    const activePageElement = document.getElementById('positionChartsPage' + page);
+                    if (activePageElement) {
+                        activePageElement.classList.remove('hidden');
                     }
                 });
             });
+            
+            // 添加期数选择器事件监听
+            const periodSelector = document.getElementById('positionChartPeriods');
+            if (periodSelector) {
+                periodSelector.addEventListener('change', function() {
+                    updateAllPositionCharts(parseInt(this.value));
+                });
+            }
+            
+            // 添加更新按钮事件监听
+            const updateBtn = document.getElementById('updateAllChartsBtn');
+            if (updateBtn) {
+                updateBtn.addEventListener('click', function() {
+                    const numPeriods = parseInt(document.getElementById('positionChartPeriods')?.value || 20);
+                    updateAllPositionCharts(numPeriods);
+                });
+            }
         }
         
         // 更新指定位置的走势图
         function updatePositionChart(position, numPeriods = 20) {
+            // 为了确保修改生效，我们将强制重新创建图表而不是仅更新数据
+            if (localState.positionCharts && localState.positionCharts[position]) {
+                localState.positionCharts[position].destroy();
+                delete localState.positionCharts[position];
+            }
+            
+            // 强制重新初始化图表
+            initPositionChart(position);
+            
+            // 以下是原始更新逻辑，保留供参考
             if (!localState.positionCharts || !localState.positionCharts[position] || !localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
                 return;
             }
@@ -2521,18 +3537,41 @@
             localState.positionCharts[position].update();
         }
         
+        // 更新末位号码走势图
+        function updateLastDigitChart(digit, numPeriods = 20) {
+            // 为了确保修改生效，我们将强制重新创建图表
+            if (localState.lastDigitCharts && localState.lastDigitCharts[digit]) {
+                localState.lastDigitCharts[digit].destroy();
+                delete localState.lastDigitCharts[digit];
+            }
+            
+            // 强制重新初始化图表
+            initLastDigitChart(digit);
+        }
+        
         // 更新所有位置的走势图
         function updateAllPositionCharts(numPeriods = 20) {
             // 验证数据和图表存在性
-            if (!localState.positionCharts || !localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
-                console.warn('没有有效的历史数据或图表实例可供更新');
+            if (!localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
+                console.warn('没有有效的历史数据可供更新');
                 return;
             }
             
             // 遍历所有位置更新图表
-            for (let i = 1; i <= 20; i++) {
-                if (localState.positionCharts[i]) {
-                    updatePositionChart(i, numPeriods);
+            if (localState.positionCharts) {
+                for (let i = 1; i <= 20; i++) {
+                    if (localState.positionCharts[i]) {
+                        updatePositionChart(i, numPeriods);
+                    }
+                }
+            }
+            
+            // 遍历所有末位号码更新图表
+            if (localState.lastDigitCharts) {
+                for (let i = 0; i <= 9; i++) {
+                    if (localState.lastDigitCharts[i]) {
+                        updateLastDigitChart(i, numPeriods);
+                    }
                 }
             }
         }
@@ -3955,6 +4994,14 @@
             // 使用setTimeout确保在数据加载后再初始化走势图
             setTimeout(() => {
                 initPositionCharts();
+                
+                // 添加另一个延迟，确保图表初始化完成后再强制刷新，以应用我们的修改
+                setTimeout(() => {
+                    if (window.forceRefreshCharts) {
+                        console.log('在页面初始化后强制刷新所有位置图表');
+                        window.forceRefreshCharts();
+                    }
+                }, 200);
             }, 100);
         }
         
