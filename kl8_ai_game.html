@@ -238,7 +238,7 @@
                     <option value="smart">智能预测</option>
                     <option value="balanced">平衡分区</option>
                     <option value="frequency">频率预测</option>
-                    <option value="similarityFrequency">历史相似性预测</option>
+                    <option value="positionTrend">位置走势预测</option>
                 </select></p>
                 <p class="text-sm text-gray-500">模型状态: <span id="modelStatus" class="text-warning">初始化中...</span></p>
             </div>
@@ -404,12 +404,22 @@
                 <!-- 号码位置走势图（分页显示） -->
                 <div class="bg-white rounded-lg shadow-sm border p-4 mb-6">
                     <div class="flex justify-between items-center mb-3">
-                        <h3 class="text-lg font-semibold">号码位置走势图</h3>
+                        <div class="flex items-center">
+                            <h3 class="text-lg font-semibold mr-4">号码位置走势图</h3>
+                            <button id="scrollLeftBtn" class="bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-l-md text-sm" disabled>
+                                &lt;
+                            </button>
+                            <button id="scrollRightBtn" class="bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-r-md text-sm">
+                                &gt;
+                            </button>
+                            <span id="chartPageInfo" class="ml-3 text-sm text-gray-500">第 1 页</span>
+                        </div>
                         <div class="flex items-center space-x-3">
                             <select id="positionChartPeriods" class="border rounded-md px-3 py-1.5 text-sm" aria-label="选择走势图显示期数">
                                 <option value="10">最近10期</option>
-                                <option value="20" selected>最近20期</option>
+                                <option value="20">最近20期</option>
                                 <option value="30">最近30期</option>
+                                <option value="47" selected>最近47期</option>
                                 <option value="all">所有期数</option>
                             </select>
                             <button id="updateAllChartsBtn" class="bg-primary hover:bg-primary/90 text-white px-3 py-1.5 rounded-md text-sm transition-all">
@@ -826,7 +836,33 @@
             document.getElementById('autoSelectBtn').addEventListener('click', function() {
                 const method = document.getElementById('predictionMethod').value;
                 const predictedNumbers = predictNumbers(method);
-                showPredictedNumbers(predictedNumbers);
+                
+                // 自动保存预测记录，但避免重复保存相同期号的记录
+                localState.selectedNumbers = new Set(predictedNumbers);
+                
+                // 获取当前预测期号
+                const currentPeriod = localState.lastPrediction.period;
+                
+                // 检查是否已存在相同期号的预测记录
+                const existingIndex = localState.predictionHistory.findIndex(p => p.period === currentPeriod);
+                
+                if (existingIndex !== -1) {
+                    // 如果存在相同期号的记录，则更新它而不是创建新记录
+                    const updatedPrediction = {
+                        ...localState.predictionHistory[existingIndex],
+                        timestamp: new Date().toLocaleString('zh-CN'),
+                        method: method,
+                        numbers: Array.from(localState.selectedNumbers).sort((a, b) => a - b)
+                    };
+                    
+                    localState.predictionHistory[existingIndex] = updatedPrediction;
+                    savePredictionHistory();
+                    updateHistoryTable();
+                    showNotification('预测记录已更新', 'success');
+                } else {
+                    // 如果不存在相同期号的记录，则创建新记录
+                    savePrediction();
+                }
             });
             
             // 预测方法选择事件
@@ -1227,9 +1263,9 @@
                     // 平衡分区预测
                     predictedNumbers = balancedPrediction();
                     break;
-                case 'similarityFrequency':
-                    // 基于历史相同号码和频率分布预测
-                    predictedNumbers = similarityFrequencyPrediction();
+                case 'positionTrend':
+                    // 基于位置走势预测
+                    predictedNumbers = positionTrendPrediction();
                     break;
                 case 'smart':
                 default:
@@ -1258,8 +1294,304 @@
             return predictedNumbers;
         }
         
-        // 基于历史相同号码和频率分布的预测算法
-        // 历史相似性频率预测算法 v3.0 (优化版)
+        // 基于位置走势的预测算法（增强版）
+        // 分析每个位置的历史走势，预测下一期可能出现的号码
+        function positionTrendPrediction() {
+            console.log('执行增强版基于位置走势的预测算法...');
+            
+            if (!localState.kl8HistoryData || localState.kl8HistoryData.length < 10) {
+                console.error('历史数据不足，无法进行位置走势分析');
+                return [];
+            }
+            
+            const predictedNumbers = new Map(); // 使用Map存储预测号码及其置信度
+            const numPositions = 20; // 快乐8有20个位置
+            const recentPeriods = Math.min(30, localState.kl8HistoryData.length); // 使用最多30期历史数据
+            
+            // 计算全局位置统计信息
+            const globalStats = calculateGlobalPositionStats();
+            
+            // 对每个位置进行独立分析
+            for (let position = 1; position <= numPositions; position++) {
+                // 获取该位置最近几期的号码
+                const positionHistory = [];
+                for (let i = 0; i < recentPeriods; i++) {
+                    const periodData = localState.kl8HistoryData[i];
+                    if (periodData.numbers && periodData.numbers.length >= position) {
+                        positionHistory.push(parseInt(periodData.numbers[position - 1]));
+                    }
+                }
+                
+                if (positionHistory.length < 5) continue; // 数据不足时跳过
+                
+                // 使用增强算法分析位置走势并预测下一个号码
+                const predictedNum = enhancedPredictNextNumberForPosition(
+                    positionHistory, 
+                    position, 
+                    globalStats, 
+                    recentPeriods
+                );
+                
+                if (predictedNum && predictedNum >= 1 && predictedNum <= 80) {
+                    // 计算置信度分数（基于历史数据量和趋势强度）
+                    const confidence = calculateConfidenceScore(positionHistory, position, globalStats);
+                    
+                    // 如果该号码已经被预测，保留置信度更高的
+                    if (!predictedNumbers.has(predictedNum) || confidence > predictedNumbers.get(predictedNum)) {
+                        predictedNumbers.set(predictedNum, confidence);
+                    }
+                }
+            }
+            
+            // 按置信度排序
+            const sortedNumbers = Array.from(predictedNumbers.entries())
+                .sort(([,confA], [,confB]) => confB - confA)
+                .map(([num]) => num);
+            
+            // 如果预测结果不足20个号码，使用频率数据补充
+            if (sortedNumbers.length < 20 && localState.frequencyData) {
+                let freqIndex = 0;
+                while (sortedNumbers.length < 20 && freqIndex < localState.frequencyData.length) {
+                    const num = localState.frequencyData[freqIndex].number;
+                    if (!sortedNumbers.includes(num)) {
+                        sortedNumbers.push(num);
+                    }
+                    freqIndex++;
+                }
+            }
+            
+            // 转换为数组并排序
+            const result = sortedNumbers.slice(0, 20).sort((a, b) => a - b);
+            console.log('增强的位置走势预测完成，选中号码:', result);
+            return result;
+        }
+        
+        // 计算全局位置统计信息
+        function calculateGlobalPositionStats() {
+            const stats = {};
+            const numPositions = 20;
+            
+            for (let position = 1; position <= numPositions; position++) {
+                const positionNumbers = [];
+                
+                // 收集该位置的所有历史号码
+                for (let i = 0; i < localState.kl8HistoryData.length; i++) {
+                    const periodData = localState.kl8HistoryData[i];
+                    if (periodData.numbers && periodData.numbers.length >= position) {
+                        positionNumbers.push(parseInt(periodData.numbers[position - 1]));
+                    }
+                }
+                
+                if (positionNumbers.length > 0) {
+                    // 计算该位置的统计信息
+                    const avg = positionNumbers.reduce((sum, num) => sum + num, 0) / positionNumbers.length;
+                    const stdDev = calculateStandardDeviation(positionNumbers);
+                    const max = Math.max(...positionNumbers);
+                    const min = Math.min(...positionNumbers);
+                    
+                    // 计算号码分布频率
+                    const numberCounts = {};
+                    positionNumbers.forEach(num => {
+                        numberCounts[num] = (numberCounts[num] || 0) + 1;
+                    });
+                    
+                    stats[position] = {
+                        average: avg,
+                        standardDeviation: stdDev,
+                        min: min,
+                        max: max,
+                        totalOccurrences: positionNumbers.length,
+                        numberFrequencies: numberCounts
+                    };
+                }
+            }
+            
+            return stats;
+        }
+        
+        // 增强的单个位置预测函数
+        function enhancedPredictNextNumberForPosition(positionHistory, position, globalStats, recentPeriods) {
+            // 1. 多层次移动平均线分析（短期、中期、长期）
+            const shortMA = calculateMovingAverage(positionHistory, 3);
+            const mediumMA = calculateMovingAverage(positionHistory, 7);
+            const longMA = calculateMovingAverage(positionHistory, Math.min(15, positionHistory.length));
+            
+            // 2. 增强的趋势分析
+            const shortTrend = analyzeTrend(positionHistory, 3);
+            const mediumTrend = analyzeTrend(positionHistory, 7);
+            const longTrend = analyzeTrend(positionHistory, Math.min(15, positionHistory.length));
+            
+            // 3. 波动性分析
+            const stdDev = calculateStandardDeviation(positionHistory);
+            const valueRange = Math.max(...positionHistory) - Math.min(...positionHistory);
+            const volatility = valueRange > 0 ? stdDev / valueRange : 0;
+            
+            // 4. 位置特有模式分析
+            const positionStats = globalStats[position];
+            
+            // 5. 基于多种因素的加权预测
+            let predicted = 0;
+            
+            // 移动平均线权重（近期更重要）
+            predicted += shortMA * 0.5;
+            predicted += mediumMA * 0.3;
+            predicted += longMA * 0.2;
+            
+            // 根据趋势调整预测值
+            const trendStrength = calculateTrendStrength(shortTrend, mediumTrend, longTrend);
+            if (trendStrength !== 0) {
+                predicted += stdDev * 0.4 * trendStrength;
+            }
+            
+            // 考虑位置特有属性
+            if (positionStats) {
+                // 位置平均值回归
+                predicted = predicted * 0.7 + positionStats.average * 0.3;
+                
+                // 确保预测值在该位置的合理范围内
+                if (predicted < positionStats.min) predicted = positionStats.min + Math.random() * 5;
+                if (predicted > positionStats.max) predicted = positionStats.max - Math.random() * 5;
+            }
+            
+            // 6. 添加随机波动（根据波动性调整）
+            const randomFactor = (Math.random() - 0.5) * stdDev * Math.min(volatility * 2, 1);
+            predicted += randomFactor;
+            
+            // 7. 四舍五入并确保在1-80范围内
+            predicted = Math.round(predicted);
+            predicted = Math.max(1, Math.min(80, predicted));
+            
+            return predicted;
+        }
+        
+        // 计算趋势强度
+        function calculateTrendStrength(shortTrend, mediumTrend, longTrend) {
+            let strength = 0;
+            
+            // 将趋势转换为数值
+            const trendValues = {
+                'up': 1,
+                'down': -1,
+                'stable': 0
+            };
+            
+            // 短期趋势权重最高
+            strength += trendValues[shortTrend] * 0.5;
+            strength += trendValues[mediumTrend] * 0.3;
+            strength += trendValues[longTrend] * 0.2;
+            
+            return strength;
+        }
+        
+        // 计算预测置信度分数
+        function calculateConfidenceScore(positionHistory, position, globalStats) {
+            let score = 0;
+            
+            // 数据量分数
+            const dataVolumeScore = Math.min(positionHistory.length / 20, 1) * 0.3;
+            score += dataVolumeScore;
+            
+            // 趋势一致性分数
+            const shortTrend = analyzeTrend(positionHistory, 3);
+            const mediumTrend = analyzeTrend(positionHistory, 7);
+            const trendConsistency = shortTrend === mediumTrend && shortTrend !== 'stable' ? 0.3 : 0;
+            score += trendConsistency;
+            
+            // 波动性分数（波动性越低，预测越可靠）
+            const valueRange = Math.max(...positionHistory) - Math.min(...positionHistory);
+            const stdDev = calculateStandardDeviation(positionHistory);
+            const volatilityScore = valueRange > 0 ? 0.2 * (1 - Math.min(stdDev / valueRange, 1)) : 0.1;
+            score += volatilityScore;
+            
+            // 位置模式分数
+            if (globalStats[position]) {
+                const posStats = globalStats[position];
+                const recentAvg = positionHistory.slice(0, 5).reduce((sum, num) => sum + num, 0) / 5;
+                const avgDiff = Math.abs(recentAvg - posStats.average) / posStats.average;
+                const patternScore = 0.2 * (1 - Math.min(avgDiff, 1));
+                score += patternScore;
+            }
+            
+            return Math.min(score, 1);
+        }
+        
+        // 为单个位置预测下一个可能出现的号码
+        function predictNextNumberForPosition(positionHistory) {
+            // 1. 计算移动平均线
+            const movingAverage = calculateMovingAverage(positionHistory, 3);
+            
+            // 2. 分析趋势（上升/下降/平稳）
+            const trend = analyzeTrend(positionHistory, 5);
+            
+            // 3. 计算标准差（波动性）
+            const stdDev = calculateStandardDeviation(positionHistory);
+            
+            // 4. 基于趋势和波动性进行预测
+            let predicted = movingAverage;
+            
+            // 根据趋势调整预测值
+            if (trend === 'up') {
+                // 上升趋势，预测值略高于移动平均
+                predicted += stdDev * 0.3;
+            } else if (trend === 'down') {
+                // 下降趋势，预测值略低于移动平均
+                predicted -= stdDev * 0.3;
+            }
+            
+            // 添加一些随机波动
+            predicted += (Math.random() - 0.5) * stdDev * 0.5;
+            
+            // 四舍五入并确保在1-80范围内
+            predicted = Math.round(predicted);
+            predicted = Math.max(1, Math.min(80, predicted));
+            
+            return predicted;
+        }
+        
+        // 计算移动平均线
+        function calculateMovingAverage(data, window) {
+            if (data.length < window) {
+                // 数据不足时，返回平均值
+                return data.reduce((sum, num) => sum + num, 0) / data.length;
+            }
+            
+            // 计算最近window个数据的平均值
+            const recentData = data.slice(0, window);
+            return recentData.reduce((sum, num) => sum + num, 0) / window;
+        }
+        
+        // 分析趋势
+        function analyzeTrend(data, window) {
+            if (data.length < window) return 'stable';
+            
+            // 计算最近window期的变化趋势
+            let sumChanges = 0;
+            for (let i = 1; i < window; i++) {
+                sumChanges += data[i - 1] - data[i]; // 注意顺序：最近到较早
+            }
+            
+            const avgChange = sumChanges / (window - 1);
+            const stdDev = calculateStandardDeviation(data.slice(0, window));
+            
+            // 判断趋势：变化超过标准差的20%才认为有明显趋势
+            if (Math.abs(avgChange) < stdDev * 0.2) {
+                return 'stable';
+            } else if (avgChange > 0) {
+                return 'up';
+            } else {
+                return 'down';
+            }
+        }
+        
+        // 计算标准差
+        function calculateStandardDeviation(data) {
+            const mean = data.reduce((sum, num) => sum + num, 0) / data.length;
+            const squaredDiffs = data.map(num => Math.pow(num - mean, 2));
+            const variance = squaredDiffs.reduce((sum, diff) => sum + diff, 0) / data.length;
+            return Math.sqrt(variance);
+        }
+        
+        // 历史相似性频率预测算法（保留但不再使用）
         function similarityFrequencyPrediction() {
             console.log('执行高级历史相似性频率预测算法 v3.0...');
             
@@ -2413,8 +2745,8 @@
                 return;
             }
             
-            // 显示最近5条记录
-            const recentHistory = localState.predictionHistory.slice(0, 5);
+            // 显示最近10条记录
+            const recentHistory = localState.predictionHistory.slice(0, 10);
             
             recentHistory.forEach(prediction => {
                 const row = document.createElement('tr');
@@ -2538,6 +2870,9 @@
                     break;
                 case 'frequency':
                     methodText = '频率预测';
+                    break;
+                case 'positionTrend':
+                    methodText = '位置走势预测';
                     break;
                 default:
                     methodText = '手动选择';
@@ -2793,6 +3128,12 @@
                 try {
                     // 直接使用备份数据
                     const simpleCreateData = [
+                        // 现有数据保持不变
+                        { period: "2025290", numbers: ["08", "09", "10", "19", "20", "25", "26", "30", "32", "35", "40", "41", "45", "47", "59", "51", "54", "65", "68", "75"] },
+                        { period: "2025289", numbers: ["03", "06", "07", "10", "11", "13", "14", "15", "31", "35", "40", "41", "43", "45", "55", "57", "66", "72", "73", "75"] },
+                        { period: "2025288", numbers: ["04", "11", "15", "16", "22", "32", "37", "46", "47", "49", "51", "53", "54", "55", "60", "62", "70", "72", "73", "74"] },
+                        { period: "2025287", numbers: ["01", "06", "17", "18", "21", "22", "23", "24", "31", "32", "40", "43", "48", "49", "52", "57", "58", "60", "68", "79"] },
+                        { period: "2025286", numbers: ["06", "12", "14", "16", "22", "24", "25", "34", "38", "39", "41", "42", "43", "54", "57", "58", "61", "62", "68", "74"] },
                         { period: "2025285", numbers: ["05", "06", "07", "09", "11", "19", "24", "27", "28", "29", "38", "39", "41", "45", "46", "63", "67", "68", "73", "80"] },
                         { period: "2025284", numbers: ["10", "11", "14", "19", "20", "26", "29", "30", "35", "37", "40", "41", "45", "46", "59", "68", "70", "77", "78", "80"] },
                         { period: "2025283", numbers: ["02", "04", "13", "19", "20", "23", "29", "31", "37", "40", "47", "52", "53", "54", "55", "63", "64", "65", "68", "69"] },
@@ -3092,6 +3433,100 @@
             initPositionCharts();
         
         // 初始化单个位置的走势图
+        // 当前显示的起始索引和每页显示期数
+        let chartDisplayPageSize = 18; // 每页显示18期
+        let currentPage = 1; // 当前页码
+        let chartDisplayStartIndex = 0; // 兼容旧代码，将从currentPage计算得出
+        
+        // 分页按钮事件处理
+        function setupPaginationButtons() {
+            const scrollLeftBtn = document.getElementById('scrollLeftBtn');
+            const scrollRightBtn = document.getElementById('scrollRightBtn');
+            const chartPageInfo = document.getElementById('chartPageInfo');
+            
+            if (!scrollLeftBtn || !scrollRightBtn || !chartPageInfo) {
+                return;
+            }
+            
+            // 上一页按钮点击事件
+            scrollLeftBtn.addEventListener('click', function() {
+                if (currentPage > 1) {
+                    currentPage--;
+                    // 从currentPage计算起始索引
+                    chartDisplayStartIndex = (currentPage - 1) * chartDisplayPageSize;
+                    updateAllPositionCharts(chartDisplayPageSize);
+                    updatePaginationButtonsState();
+                }
+            });
+            
+            // 下一页按钮点击事件
+            scrollRightBtn.addEventListener('click', function() {
+                if (localState.kl8HistoryData) {
+                    const totalPages = Math.max(1, Math.ceil(localState.kl8HistoryData.length / chartDisplayPageSize));
+                    if (currentPage < totalPages) {
+                        currentPage++;
+                        // 从currentPage计算起始索引
+                        chartDisplayStartIndex = (currentPage - 1) * chartDisplayPageSize;
+                        updateAllPositionCharts(chartDisplayPageSize);
+                        updatePaginationButtonsState();
+                    }
+                }
+            });
+        }
+        
+        // 更新分页按钮状态
+        function updatePaginationButtonsState() {
+            const scrollLeftBtn = document.getElementById('scrollLeftBtn');
+            const scrollRightBtn = document.getElementById('scrollRightBtn');
+            const chartPageInfo = document.getElementById('chartPageInfo');
+            
+            if (!scrollLeftBtn || !scrollRightBtn || !chartPageInfo) {
+                return;
+            }
+            
+            // 更新上一页按钮状态
+            scrollLeftBtn.disabled = currentPage === 1;
+            
+            // 更新下一页按钮状态
+            const totalPages = localState.kl8HistoryData ? 
+                              Math.max(1, Math.ceil(localState.kl8HistoryData.length / chartDisplayPageSize)) : 1;
+            scrollRightBtn.disabled = currentPage >= totalPages;
+            
+            // 更新页码信息
+            chartPageInfo.textContent = `第 ${currentPage} 页 / 共 ${totalPages} 页`;
+            
+            // 同步更新滑动条状态
+            if (typeof updateChartSlider === 'function') {
+                updateChartSlider();
+            }
+        }
+        
+        // 初始化滚动按钮
+        setupPaginationButtons();
+        
+        // 初始化滑动条 - 为每个号位图表单独添加滑动条
+        // 滑动条功能已移除，使用分页显示功能
+        
+        // 清理页面上可能存在的滑动条元素
+        function cleanupSliders() {
+            const oldSliders = document.querySelectorAll('[id^="chartScrollContainer"]');
+            oldSliders.forEach(container => container.remove());
+            
+            // 清除所有与滑动条相关的样式
+            const oldStyles = document.querySelectorAll('style');
+            oldStyles.forEach(style => {
+                if (style.textContent && style.textContent.includes('chart-scroll-slider')) {
+                    style.remove();
+                }
+            });
+        }
+        
+        // 清理旧的滑动条元素
+        cleanupSliders();
+        
+        // 初始化分页按钮
+        setupPaginationButtons();
+        
         function initPositionChart(position) {
             const ctx = document.getElementById('positionChart' + position).getContext('2d');
             const canvas = ctx.canvas;
@@ -3109,9 +3544,21 @@
             let positionNumbers = [];
             let drawDates = [];
             
-            // 获取历史数据
+            // 获取历史数据，支持所有期数记录和分页显示
             if (localState.kl8HistoryData && localState.kl8HistoryData.length > 0) {
-                const displayData = localState.kl8HistoryData.slice(0, 20).reverse();
+                // 获取总数据长度
+                const totalDataLength = localState.kl8HistoryData.length;
+                
+                // 根据当前页码计算起始索引
+                chartDisplayStartIndex = (currentPage - 1) * chartDisplayPageSize;
+                
+                // 计算结束索引，确保不超出范围
+                const endIndex = Math.min(chartDisplayStartIndex + chartDisplayPageSize, totalDataLength);
+                
+                // 获取当前页的数据，从旧到新排序显示
+                // 支持无限制添加新数据，自动适应数据增长
+                const displayData = localState.kl8HistoryData.slice(chartDisplayStartIndex, endIndex).reverse();
+                
                 positionNumbers = displayData.map(item => {
                     if (item.numbers && item.numbers.length >= position) {
                         return parseInt(item.numbers[position - 1]);
@@ -3121,9 +3568,9 @@
                 
                 // 获取期号数据
                 drawDates = displayData.slice(0, positionNumbers.length).map(item => {
-                    if (item.issue) {
-                        // 只显示期号的后几位
-                        return item.issue.slice(-3);
+                    if (item.period) {
+                        // 显示完整期号
+                        return item.period;
                     }
                     return '';
                 });
@@ -3283,9 +3730,11 @@
                 return null;
             }
             
-            // 使用指定数量的最近几期数据来显示走势图
-            const numPeriods = parseInt(document.getElementById('positionChartPeriods')?.value || 20);
-            const displayData = localState.kl8HistoryData.slice(0, numPeriods).reverse();
+            // 根据当前页码和每页显示数量获取数据
+            const totalDataLength = localState.kl8HistoryData.length;
+            chartDisplayStartIndex = (currentPage - 1) * chartDisplayPageSize;
+            const endIndex = Math.min(chartDisplayStartIndex + chartDisplayPageSize, totalDataLength);
+            const displayData = localState.kl8HistoryData.slice(chartDisplayStartIndex, endIndex).reverse();
             
             // 准备期号数据（只显示后三位）
             const drawDates = displayData.map(item => item.period.slice(-3));
@@ -3487,7 +3936,7 @@
             const periodSelector = document.getElementById('positionChartPeriods');
             if (periodSelector) {
                 periodSelector.addEventListener('change', function() {
-                    updateAllPositionCharts(parseInt(this.value));
+                    updateAllPositionCharts();
                 });
             }
             
@@ -3495,15 +3944,14 @@
             const updateBtn = document.getElementById('updateAllChartsBtn');
             if (updateBtn) {
                 updateBtn.addEventListener('click', function() {
-                    const numPeriods = parseInt(document.getElementById('positionChartPeriods')?.value || 20);
-                    updateAllPositionCharts(numPeriods);
+                    updateAllPositionCharts();
                 });
             }
         }
         
         // 更新指定位置的走势图
-        function updatePositionChart(position, numPeriods = 20) {
-            // 为了确保修改生效，我们将强制重新创建图表而不是仅更新数据
+        function updatePositionChart(position, numPeriods = 47) {
+            // 为了确保修改生效，我们将强制重新创建图表
             if (localState.positionCharts && localState.positionCharts[position]) {
                 localState.positionCharts[position].destroy();
                 delete localState.positionCharts[position];
@@ -3512,33 +3960,14 @@
             // 强制重新初始化图表
             initPositionChart(position);
             
-            // 以下是原始更新逻辑，保留供参考
-            if (!localState.positionCharts || !localState.positionCharts[position] || !localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
-                return;
-            }
-            
-            // 使用指定数量的最近几期数据来显示走势图
-            const displayData = localState.kl8HistoryData.slice(0, numPeriods).reverse();
-            const labels = displayData.map(item => item.period);
-            
-            // 获取每期指定位置的号码
-            const positionNumbers = displayData.map(item => {
-                if (item.numbers && item.numbers.length >= position) {
-                    return parseInt(item.numbers[position - 1]);
-                }
-                return null;
-            });
-            
-            // 更新图表数据
-            localState.positionCharts[position].data.labels = labels;
-            localState.positionCharts[position].data.datasets[0].data = positionNumbers;
-            
-            // 更新图表
-            localState.positionCharts[position].update();
+            // 更新分页按钮状态
+            updatePaginationButtonsState();
         }
         
+        // 增强的位置走势预测函数
+        
         // 更新末位号码走势图
-        function updateLastDigitChart(digit, numPeriods = 20) {
+        function updateLastDigitChart(digit, numPeriods = 47) {
             // 为了确保修改生效，我们将强制重新创建图表
             if (localState.lastDigitCharts && localState.lastDigitCharts[digit]) {
                 localState.lastDigitCharts[digit].destroy();
@@ -3547,10 +3976,13 @@
             
             // 强制重新初始化图表
             initLastDigitChart(digit);
+            
+            // 更新分页按钮状态
+            updatePaginationButtonsState();
         }
         
         // 更新所有位置的走势图
-        function updateAllPositionCharts(numPeriods = 20) {
+        function updateAllPositionCharts(numPeriods = 47) {
             // 验证数据和图表存在性
             if (!localState.kl8HistoryData || localState.kl8HistoryData.length === 0) {
                 console.warn('没有有效的历史数据可供更新');
